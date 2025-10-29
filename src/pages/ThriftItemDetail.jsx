@@ -1,122 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, ArrowLeft, Star, Eye, Calendar, Shield } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { api } from '../../services/api';
-import { useStore } from '../../store/useStore';
-import SellerProfileCard from '../components/thrift/SellerProfileCard';
-import ChatWidget from '../components/thrift/ChatWidget';
-import ThriftCard from '../components/thrift/ThriftCard';
-import toast from 'react-hot-toast';
+// src/pages/ThriftItemDetail.jsx
+import React, { useState, useEffect, useMemo } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import {
+  Heart,
+  MessageCircle,
+  Share2,
+  ArrowLeft,
+  Star,
+  Eye,
+  Calendar,
+  Shield,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 
-const ThriftItemDetail = () => {
+import { api } from "../../services/api";
+import { useStore } from "../../store/useStore";
+import SellerProfileCard from "../components/thrift/SellerProfileCard";
+import ThriftCard from "../components/thrift/ThriftCard";
+import { me } from "../lib/apiClient"; // used to verify sanctum session
+
+export default function ThriftItemDetail() {
   const { id } = useParams();
-  const { user, likedThriftItems, toggleThriftLike } = useStore();
-  
+  const navigate = useNavigate();
+
+  const { user, likedThriftItems = [], toggleThriftLike } = useStore();
+
   const [item, setItem] = useState(null);
   const [seller, setSeller] = useState(null);
   const [relatedItems, setRelatedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showChat, setShowChat] = useState(false);
-  const [chatConversation, setChatConversation] = useState(null);
 
-  const isLiked = item ? likedThriftItems.includes(item.id) : false;
+  // helpers
+  const norm = (v) => (v === undefined || v === null ? "" : String(v));
+  const itemId = useMemo(() => (item?.id ?? item?._id ?? id), [item, id]);
+
+  const isLiked = useMemo(() => {
+    return Array.isArray(likedThriftItems)
+      ? likedThriftItems.map(norm).includes(norm(itemId))
+      : false;
+  }, [likedThriftItems, itemId]);
 
   useEffect(() => {
-    if (id) {
-      loadItemDetails();
-    }
+    if (!id) return;
+    loadItemDetails(id);
+    // reset gallery on route change
+    setCurrentImageIndex(0);
   }, [id]);
 
-  const loadItemDetails = async () => {
-    if (!id) return;
-    
+  async function ensureAuth() {
+    try {
+      await me?.(); // returns 200 if logged in
+      return true;
+    } catch {
+      toast.error("Please login to continue");
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      navigate(`/login?next=${next}`, { replace: true });
+      return false;
+    }
+  }
+
+  async function loadItemDetails(itemIdParam) {
     setIsLoading(true);
     try {
-      const itemData = await api.getThriftItem(id);
-      if (itemData) {
-        setItem(itemData);
-        
-        // Load seller profile
-        const sellerData = await api.getSellerProfile(itemData.sellerId);
-        setSeller(sellerData);
-        
-        // Load related items
-        const related = await api.getThriftRecommendations(user?.id || '', itemData.id);
-        setRelatedItems(related);
+      const itemData = await api.getThriftItem(itemIdParam);
+
+      if (!itemData) {
+        setItem(null);
+        return;
+      }
+
+      // normalize minimal shape
+      const normalized = {
+        ...itemData,
+        id: itemData.id ?? itemData._id ?? itemIdParam,
+        images: Array.isArray(itemData.images)
+          ? itemData.images.map((img) => (typeof img === "string" ? img : img?.url)).filter(Boolean)
+          : itemData.image
+          ? [itemData.image]
+          : [],
+        tags: Array.isArray(itemData.tags) ? itemData.tags : [],
+        likes: Number(itemData.likes ?? itemData.likes_count ?? 0),
+        views: Number(itemData.views ?? 0),
+        createdAt: itemData.createdAt || itemData.created_at || new Date().toISOString(),
+        sellerId: itemData.sellerId || itemData.seller_id || itemData.user_id,
+      };
+
+      setItem(normalized);
+
+      // Load seller (guard missing sellerId)
+      if (normalized.sellerId && api.getSellerProfile) {
+        const sellerData = await api.getSellerProfile(normalized.sellerId);
+        setSeller(sellerData || null);
+      } else {
+        setSeller(null);
+      }
+
+      // Related items
+      if (api.getThriftRecommendations) {
+        const related = await api.getThriftRecommendations(user?.id || "", normalized.id);
+        setRelatedItems(Array.isArray(related) ? related : []);
+      } else {
+        setRelatedItems([]);
       }
     } catch (error) {
-      toast.error('Failed to load item details');
+      console.error(error);
+      toast.error("Failed to load item details");
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const handleLike = async () => {
-    if (!item || !user) {
-      toast.error('Please login to like items');
-      return;
-    }
-    
+  async function handleLike() {
+    const ok = await ensureAuth();
+    if (!ok || !item) return;
+
+    // optimistic update
+    toggleThriftLike(itemId);
     try {
-      await api.toggleThriftLike(item.id, user.id);
-      toggleThriftLike(item.id);
-      toast.success(isLiked ? 'Removed from likes' : 'Added to likes');
-    } catch (error) {
-      toast.error('Failed to update like');
-    }
-  };
-
-  const handleStartChat = async () => {
-    if (!item || !user) {
-      toast.error('Please login to chat with seller');
-      return;
-    }
-
-    try {
-      const conversation = await api.startConversation(item.sellerId, user.id, item.id);
-      setChatConversation(conversation);
-      setShowChat(true);
-    } catch (error) {
-      toast.error('Failed to start conversation');
-    }
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: item?.name,
-          text: item?.description,
-          url: window.location.href,
-        });
-      } catch (error) {
-        // Fallback to copying URL
-        navigator.clipboard.writeText(window.location.href);
-        toast.success('Link copied to clipboard!');
+      if (api.toggleThriftLike) {
+        await api.toggleThriftLike(itemId, user?.id);
+      } else if (api.post) {
+        await api.post(`/thrift/items/${itemId}/like`);
       }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success('Link copied to clipboard!');
+      toast.success(isLiked ? "Removed from likes" : "Added to likes");
+    } catch (error) {
+      // revert
+      toggleThriftLike(itemId);
+      console.error(error);
+      toast.error("Failed to update like");
     }
-  };
+  }
 
-  const getConditionColor = (condition) => {
-    switch (condition) {
-      case 'new': return 'bg-green-100 text-green-800';
-      case 'like-new': return 'bg-blue-100 text-blue-800';
-      case 'good': return 'bg-yellow-100 text-yellow-800';
-      case 'fair': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+  async function handleStartChat() {
+    const ok = await ensureAuth();
+    if (!ok || !item) return;
+
+    try {
+      const conv = await api.createOrGetConversationWithSeller(
+        item.sellerId,
+        itemId,
+        user?.id
+      );
+      if (conv?.id) {
+        navigate(`/chat/${conv.id}`);
+      } else {
+        toast.error("Could not open chat");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to start conversation");
     }
-  };
+  }
 
-  const formatCondition = (condition) => {
-    return condition.split('-').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  };
+  async function handleShare() {
+    const url = window.location.href;
+    const text = item?.description || "Check out this thrift item!";
+    const title = item?.name || "Thrift Item";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard!");
+    }
+  }
+
+  function getConditionColor(condition) {
+    const c = String(condition || "unknown").toLowerCase();
+    switch (c) {
+      case "new":
+        return "bg-green-100 text-green-800";
+      case "like-new":
+        return "bg-blue-100 text-blue-800";
+      case "good":
+        return "bg-yellow-100 text-yellow-800";
+      case "fair":
+        return "bg-orange-100 text-orange-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  }
+
+  function formatCondition(condition) {
+    return String(condition || "Unknown")
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
 
   if (isLoading) {
     return (
@@ -144,16 +220,16 @@ const ThriftItemDetail = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Item not found</h2>
-          <Link
-            to="/thrift"
-            className="text-purple-600 hover:text-purple-700 font-medium"
-          >
+          <Link to="/thrift" className="text-purple-600 hover:text-purple-700 font-medium">
             Back to Thrift Store
           </Link>
         </div>
       </div>
     );
   }
+
+  const gallery = item.images?.length ? item.images : [];
+  const safeIndex = Math.min(currentImageIndex, Math.max(gallery.length - 1, 0));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -175,30 +251,33 @@ const ThriftItemDetail = () => {
               animate={{ opacity: 1 }}
               className="aspect-square bg-white rounded-2xl overflow-hidden shadow-lg"
             >
-              <img
-                src={item.images[currentImageIndex]}
-                alt={item.name}
-                className="w-full h-full object-cover"
-              />
+              {gallery.length ? (
+                <img
+                  src={gallery[safeIndex]}
+                  alt={item.name || "Thrift item"}
+                  className="w-full h-full object-cover"
+                  onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+              ) : (
+                <div className="w-full h-full grid place-items-center text-gray-400">
+                  No image
+                </div>
+              )}
             </motion.div>
-            
-            {item.images.length > 1 && (
+
+            {gallery.length > 1 && (
               <div className="flex space-x-2 overflow-x-auto">
-                {item.images.map((image, index) => (
+                {gallery.map((image, index) => (
                   <button
-                    key={index}
+                    key={`${image}-${index}`}
                     onClick={() => setCurrentImageIndex(index)}
                     className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
-                      currentImageIndex === index
-                        ? 'border-purple-600'
-                        : 'border-gray-200 hover:border-gray-300'
+                      safeIndex === index
+                        ? "border-purple-600"
+                        : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
-                    <img
-                      src={image}
-                      alt={`${item.name} ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={image} alt={`${item.name || "Thrift"} ${index + 1}`} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -210,28 +289,36 @@ const ThriftItemDetail = () => {
             <div>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{item.name}</h1>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                    {item.name || item.title || "Untitled item"}
+                  </h1>
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <div className="flex items-center space-x-1">
                       <Eye className="h-4 w-4" />
-                      <span>{item.views} views</span>
+                      <span>{Number(item.views ?? 0)} views</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Heart className="h-4 w-4" />
-                      <span>{item.likes} likes</span>
+                      <span>{Number(item.likes ?? item.likes_count ?? 0)} likes</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Calendar className="h-4 w-4" />
-                      <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                      <span>
+                        {new Date(item.createdAt || item.created_at || Date.now()).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="text-right">
                   <div className="text-3xl font-bold text-gray-900 mb-2">
-                    ${item.price}
+                    ${Number(item.price || item.amount || 0).toFixed(2)}
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getConditionColor(item.condition)}`}>
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${getConditionColor(
+                      item.condition
+                    )}`}
+                  >
                     {formatCondition(item.condition)}
                   </span>
                 </div>
@@ -241,39 +328,41 @@ const ThriftItemDetail = () => {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <span className="text-sm text-gray-600">Size</span>
-                  <div className="font-medium text-gray-900">{item.size}</div>
+                  <div className="font-medium text-gray-900">{item.size || "—"}</div>
                 </div>
                 <div>
                   <span className="text-sm text-gray-600">Category</span>
-                  <div className="font-medium text-gray-900">{item.category}</div>
+                  <div className="font-medium text-gray-900">{item.category || "—"}</div>
                 </div>
                 <div>
                   <span className="text-sm text-gray-600">Color</span>
-                  <div className="font-medium text-gray-900">{item.color}</div>
+                  <div className="font-medium text-gray-900">{item.color || "—"}</div>
                 </div>
                 <div>
                   <span className="text-sm text-gray-600">Gender</span>
-                  <div className="font-medium text-gray-900 capitalize">{item.gender}</div>
+                  <div className="font-medium text-gray-900 capitalize">{item.gender || "—"}</div>
                 </div>
               </div>
 
               {/* Description */}
               <div className="mb-6">
                 <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
-                <p className="text-gray-700 leading-relaxed">{item.description}</p>
+                <p className="text-gray-700 leading-relaxed">
+                  {item.description || "Pre-loved fashion item."}
+                </p>
               </div>
 
               {/* Tags */}
-              {item.tags.length > 0 && (
+              {Array.isArray(item.tags) && item.tags.length > 0 && (
                 <div className="mb-6">
                   <h3 className="font-semibold text-gray-900 mb-2">Tags</h3>
                   <div className="flex flex-wrap gap-2">
                     {item.tags.map((tag, index) => (
                       <span
-                        key={index}
+                        key={`${tag}-${index}`}
                         className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
                       >
-                        #{tag}
+                        #{String(tag)}
                       </span>
                     ))}
                   </div>
@@ -288,14 +377,14 @@ const ThriftItemDetail = () => {
                   onClick={handleLike}
                   className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 ${
                     isLiked
-                      ? 'bg-red-500 text-white hover:bg-red-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? "bg-red-500 text-white hover:bg-red-600"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  <Heart className={`h-5 w-5 ${isLiked ? 'fill-current' : ''}`} />
-                  <span>{isLiked ? 'Liked' : 'Like'}</span>
+                  <Heart className={`h-5 w-5 ${isLiked ? "fill-current" : ""}`} />
+                  <span>{isLiked ? "Liked" : "Like"}</span>
                 </button>
-                
+
                 <button
                   onClick={handleShare}
                   className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
@@ -321,7 +410,8 @@ const ThriftItemDetail = () => {
                 <div>
                   <h4 className="font-medium text-blue-900 mb-1">Trust & Safety</h4>
                   <p className="text-sm text-blue-700">
-                    All items are reviewed before listing. Meet in public places and inspect items before purchase.
+                    All items are reviewed before listing. Meet in public places and inspect items
+                    before purchase.
                   </p>
                 </div>
               </div>
@@ -338,27 +428,17 @@ const ThriftItemDetail = () => {
         )}
 
         {/* Related Items */}
-        {relatedItems.length > 0 && (
+        {relatedItems?.length > 0 && (
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">You might also like</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedItems.map((relatedItem, index) => (
-                <ThriftCard key={relatedItem.id} item={relatedItem} index={index} />
+                <ThriftCard key={relatedItem.id || relatedItem._id || index} item={relatedItem} index={index} />
               ))}
             </div>
           </div>
         )}
       </div>
-
-      {/* Chat Widget */}
-      {showChat && chatConversation && (
-        <ChatWidget
-          conversation={chatConversation}
-          onClose={() => setShowChat(false)}
-        />
-      )}
     </div>
   );
-};
-
-export default ThriftItemDetail;
+}

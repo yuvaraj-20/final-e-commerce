@@ -6,7 +6,7 @@ import { api } from '../../services/api';
 import { useStore } from '../../store/useStore';
 import toast from 'react-hot-toast';
 
-const CustomDesign = () => {
+const CustomDesign = () => { //ai suggestions now fonts only (typography)
   const { user, addCustomDesign } = useStore();
   const fileInputRef = useRef(null);
   

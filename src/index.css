@@ -1,1 +1,35 @@
+/* src/index.css */
 @import "tailwindcss";
+
+/* header height fallback (already added) */
+:root {
+  --header-height: 64px; /* fallback while JS measures */
+  --brand-font: "Playfair Display", Georgia, serif;
+  --ui-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* ensure anchors / internal links land below header */
+html {
+  scroll-padding-top: var(--header-height);
+}
+
+/* global font settings (UI) */
+body {
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* brand typography helper (use in header brand title) */
+.brand {
+  font-family: var(--brand-font);
+  letter-spacing: 0.06em;
+}
+
+/* optional: nicer focus outlines for keyboard users */
+:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16); /* subtle indigo ring */
+  border-radius: 6px;
+}

@@ -1,47 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Search, Filter, Grid, List, Zap, Flame, Info
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useStore } from '../../store/useStore';
-import { api } from '../../services/api';
-import ComboCard from '../components/monofit/ComboCard';
-import TrendingCombos from '../components/monofit/TrendingCombos';
-import CommunityFeed from '../components/monofit/CommunityFeed';
-import UploadComboForm from '../components/monofit/UploadComboForm';
-import toast from 'react-hot-toast';
+// src/pages/MonoFit.jsx
+import React, { useState, useEffect } from "react";
+import { Search, Filter, Grid, List, Zap, Flame } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+
+import { useStore } from "../store/useStore";
+import { api } from "../services/api";
+import ComboCard from "../components/monofit/ComboCard";
+import TrendingCombos from "../components/monofit/TrendingCombos";
+import CommunityFeed from "../components/monofit/CommunityFeed";
+import UploadComboForm from "../components/monofit/UploadComboForm";
+import { me } from "../lib/apiClient";
 
 const MonoFit = () => {
   const {
-    user,
     monofitCombos,
     setMonofitCombos,
     monofitFilters,
-    setMonofitFilters
+    setMonofitFilters,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState('combos'); // 'combos' | 'trending' | 'community'
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState("combos"); // 'combos' | 'trending' | 'community'
+  const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const categories = ['All', 'Casual', 'Formal', 'Streetwear', 'Vintage', 'Minimalist', 'Sporty'];
-  const occasions = ['All', 'Work', 'Date Night', 'Weekend', 'Party', 'Travel', 'Gym'];
-  const seasons = ['All', 'Spring', 'Summer', 'Fall', 'Winter'];
-  const genders = ['All', 'Men', 'Women', 'Unisex'];
+  const categories = [
+    "All",
+    "Casual",
+    "Formal",
+    "Streetwear",
+    "Vintage",
+    "Minimalist",
+    "Sporty",
+  ];
+  const occasions = ["All", "Work", "Date Night", "Weekend", "Party", "Travel", "Gym"];
+  const seasons = ["All", "Spring", "Summer", "Fall", "Winter"];
+  const genders = ["All", "Men", "Women", "Unisex"];
 
   useEffect(() => {
     loadCombos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monofitFilters]);
 
   const loadCombos = async () => {
     setIsLoading(true);
     try {
       const combos = await api.getMonofitCombos(monofitFilters);
-      setMonofitCombos(combos);
+      setMonofitCombos(combos || []);
     } catch (err) {
-      toast.error('Failed to load combos');
+      toast.error("Failed to load combos");
     } finally {
       setIsLoading(false);
     }
@@ -49,6 +61,27 @@ const MonoFit = () => {
 
   const handleFilterChange = (key, value) => {
     setMonofitFilters({ ...monofitFilters, [key]: value });
+  };
+
+  const ensureAdminForUpload = async () => {
+    try {
+      const u = await me(); // 200 if logged in
+      if (!u || !u.role) throw new Error("not-auth");
+      if (String(u.role).toLowerCase() !== "admin") {
+        toast.error("Only admins can create combos");
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error("Please sign in to continue");
+      window.location.href = `/login?next=${encodeURIComponent("/monofit")}`;
+      return false;
+    }
+  };
+
+  const handleUploadClick = async () => {
+    const ok = await ensureAdminForUpload();
+    if (ok) setShowUploadForm(true);
   };
 
   const handleUploadSuccess = () => {
@@ -61,10 +94,7 @@ const MonoFit = () => {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <UploadComboForm
-            onSuccess={handleUploadSuccess}
-            onCancel={() => setShowUploadForm(false)}
-          />
+          <UploadComboForm onSuccess={handleUploadSuccess} onCancel={() => setShowUploadForm(false)} />
         </div>
       </div>
     );
@@ -82,59 +112,57 @@ const MonoFit = () => {
               </div>
               <h1 className="text-3xl font-bold text-gray-900">MonoFit Store</h1>
             </div>
-            <p className="text-gray-600">AI‑curated outfit combinations for the perfect look</p>
+            <p className="text-gray-600">AI-curated outfit combinations for the perfect look</p>
           </div>
 
-          {user?.role === 'admin' && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowUploadForm(true)}
-              className="mt-4 md:mt-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-full font-semibold flex items-center space-x-2 hover:from-purple-700 hover:to-blue-700 transition-colors shadow-lg"
-            >
-              <Zap className="h-5 w-5" />
-              <span>Create Combo</span>
-            </motion.button>
-          )}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleUploadClick}
+            className="mt-4 md:mt-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-full font-semibold flex items-center space-x-2 hover:from-purple-700 hover:to-blue-700 transition-colors shadow-lg"
+          >
+            <Zap className="h-5 w-5" />
+            <span>Create Combo</span>
+          </motion.button>
         </div>
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
           <div className="flex flex-wrap gap-2 mb-6">
             <button
-              onClick={() => setActiveTab('combos')}
+              onClick={() => setActiveTab("combos")}
               className={`px-6 py-3 rounded-full font-medium transition-colors ${
-                activeTab === 'combos'
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                activeTab === "combos"
+                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               All Combos
             </button>
             <button
-              onClick={() => setActiveTab('trending')}
+              onClick={() => setActiveTab("trending")}
               className={`px-6 py-3 rounded-full font-medium transition-colors flex items-center space-x-2 ${
-                activeTab === 'trending'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                activeTab === "trending"
+                  ? "bg-gradient-to-r from-orange-500 to-red-500 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               <Flame className="h-4 w-4" />
               <span>Trending Now</span>
             </button>
             <button
-              onClick={() => setActiveTab('community')}
+              onClick={() => setActiveTab("community")}
               className={`px-6 py-3 rounded-full font-medium transition-colors ${
-                activeTab === 'community'
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                activeTab === "community"
+                  ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               Community Looks
             </button>
           </div>
 
-          {activeTab === 'combos' && (
+          {activeTab === "combos" && (
             <>
               {/* Search */}
               <div className="mb-6 relative">
@@ -143,7 +171,7 @@ const MonoFit = () => {
                   type="text"
                   placeholder="Search outfit combos..."
                   value={monofitFilters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  onChange={(e) => handleFilterChange("search", e.target.value)}
                   className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
@@ -155,11 +183,11 @@ const MonoFit = () => {
                   return (
                     <button
                       key={g}
-                      onClick={() => handleFilterChange('gender', lower)}
+                      onClick={() => handleFilterChange("gender", lower)}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                         monofitFilters.gender === lower
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
                       {g}
@@ -181,7 +209,7 @@ const MonoFit = () => {
 
                   <select
                     value={monofitFilters.sortBy}
-                    onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+                    onChange={(e) => handleFilterChange("sortBy", e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
                     <option value="newest">Newest First</option>
@@ -193,26 +221,24 @@ const MonoFit = () => {
                 </div>
 
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600">
-                    {monofitCombos.length} combos found
-                  </span>
+                  <span className="text-sm text-gray-600">{monofitCombos.length} combos found</span>
                   <div className="flex border border-gray-300 rounded-lg overflow-hidden">
                     <button
-                      onClick={() => setViewMode('grid')}
+                      onClick={() => setViewMode("grid")}
                       className={`p-2 ${
-                        viewMode === 'grid'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
+                        viewMode === "grid"
+                          ? "bg-purple-600 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
                       }`}
                     >
                       <Grid className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => setViewMode('list')}
+                      onClick={() => setViewMode("list")}
                       className={`p-2 ${
-                        viewMode === 'list'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
+                        viewMode === "list"
+                          ? "bg-purple-600 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
                       }`}
                     >
                       <List className="h-4 w-4" />
@@ -226,7 +252,7 @@ const MonoFit = () => {
                 {showFilters && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
+                    animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
                     className="mt-6 pt-6 border-t border-gray-200"
                   >
@@ -235,10 +261,10 @@ const MonoFit = () => {
                         <h3 className="font-medium text-gray-900 mb-3">Style Category</h3>
                         <select
                           value={monofitFilters.category}
-                          onChange={(e) => handleFilterChange('category', e.target.value)}
+                          onChange={(e) => handleFilterChange("category", e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         >
-                          {categories.map(c => (
+                          {categories.map((c) => (
                             <option key={c} value={c.toLowerCase()}>
                               {c}
                             </option>
@@ -250,10 +276,10 @@ const MonoFit = () => {
                         <h3 className="font-medium text-gray-900 mb-3">Occasion</h3>
                         <select
                           value={monofitFilters.occasion}
-                          onChange={(e) => handleFilterChange('occasion', e.target.value)}
+                          onChange={(e) => handleFilterChange("occasion", e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         >
-                          {occasions.map(o => (
+                          {occasions.map((o) => (
                             <option key={o} value={o.toLowerCase()}>
                               {o}
                             </option>
@@ -265,10 +291,10 @@ const MonoFit = () => {
                         <h3 className="font-medium text-gray-900 mb-3">Season</h3>
                         <select
                           value={monofitFilters.season}
-                          onChange={(e) => handleFilterChange('season', e.target.value)}
+                          onChange={(e) => handleFilterChange("season", e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         >
-                          {seasons.map(s => (
+                          {seasons.map((s) => (
                             <option key={s} value={s.toLowerCase()}>
                               {s}
                             </option>
@@ -283,7 +309,9 @@ const MonoFit = () => {
                           min="0"
                           max="500"
                           value={monofitFilters.priceRange[1]}
-                          onChange={(e) => handleFilterChange('priceRange', [0, parseInt(e.target.value)])}
+                          onChange={(e) =>
+                            handleFilterChange("priceRange", [0, parseInt(e.target.value, 10)])
+                          }
                           className="w-full"
                         />
                         <div className="text-sm text-gray-600">
@@ -296,13 +324,13 @@ const MonoFit = () => {
                       <button
                         onClick={() =>
                           setMonofitFilters({
-                            gender: 'all',
-                            category: 'all',
-                            occasion: 'all',
-                            season: 'all',
+                            gender: "all",
+                            category: "all",
+                            occasion: "all",
+                            season: "all",
                             priceRange: [0, 500],
-                            sortBy: 'newest',
-                            search: ''
+                            sortBy: "newest",
+                            search: "",
                           })
                         }
                         className="text-purple-600 hover:text-purple-700 text-sm font-medium"
@@ -319,7 +347,7 @@ const MonoFit = () => {
 
         {/* Main Content */}
         <AnimatePresence mode="wait">
-          {activeTab === 'combos' && (
+          {activeTab === "combos" && (
             <motion.div
               key="combos"
               initial={{ opacity: 0, y: 20 }}
@@ -341,11 +369,40 @@ const MonoFit = () => {
                   ))}
                 </div>
               ) : monofitCombos.length > 0 ? (
-                <div className={`grid gap-6 ${
-                  viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'
-                }`}>
+                <div
+                  className={`grid gap-6 ${
+                    viewMode === "grid"
+                      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      : "grid-cols-1"
+                  }`}
+                >
                   {monofitCombos.map((combo, idx) => (
-                    <ComboCard key={combo.id} combo={combo} index={idx} viewMode={viewMode} />
+                    <ComboCard
+                      key={combo.id}
+                      combo={combo}
+                      index={idx}
+                      viewMode={viewMode}
+                      onOpen={(comboId) => {
+                        // debug log
+                        // eslint-disable-next-line no-console
+                        console.log("[MonoFit] onOpen called for combo:", comboId);
+
+                        // Immediate hard redirect (bypass potential runtime exception
+                        // that stops react-router navigation). This ensures the user
+                        // always reaches the detail page.
+                        try {
+                          window.location.assign(`/monofit/${comboId}`);
+                        } catch (err) {
+                          // fallback: try setting href
+                          // eslint-disable-next-line no-console
+                          console.error("[MonoFit] window.location.assign failed, trying href:", err);
+                          window.location.href = `/monofit/${comboId}`;
+                        }
+
+                        // If you want to try react-router navigate instead, uncomment:
+                        // try { navigate(`/monofit/${comboId}`); } catch(e){ console.error(e); }
+                      }}
+                    />
                   ))}
                 </div>
               ) : (
@@ -358,13 +415,13 @@ const MonoFit = () => {
                   <button
                     onClick={() =>
                       setMonofitFilters({
-                        gender: 'all',
-                        category: 'all',
-                        occasion: 'all',
-                        season: 'all',
+                        gender: "all",
+                        category: "all",
+                        occasion: "all",
+                        season: "all",
                         priceRange: [0, 500],
-                        sortBy: 'newest',
-                        search: ''
+                        sortBy: "newest",
+                        search: "",
                       })
                     }
                     className="text-purple-600 hover:text-purple-700 font-medium"
@@ -376,7 +433,7 @@ const MonoFit = () => {
             </motion.div>
           )}
 
-          {activeTab === 'trending' && (
+          {activeTab === "trending" && (
             <motion.div
               key="trending"
               initial={{ opacity: 0, y: 20 }}
@@ -388,7 +445,7 @@ const MonoFit = () => {
             </motion.div>
           )}
 
-          {activeTab === 'community' && (
+          {activeTab === "community" && (
             <motion.div
               key="community"
               initial={{ opacity: 0, y: 20 }}

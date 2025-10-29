@@ -1,12 +1,24 @@
+// src/pages/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../../store/useStore';
 import { Navigate } from 'react-router-dom';
+import { useStore } from '../store/useStore';
+import { useAuth } from '../context/AuthContext';
 import UserDashboard from '../components/dashboard/user/UserDashboard';
+import AdminDashboard from '../components/dashboard/admin/AdminDashboard';
 import { motion } from 'framer-motion';
 
 const Dashboard = () => {
-  const { user } = useStore();
-  console.log('Dashboard user:', user);
+  // Use both auth sources for flexibility - prioritize useStore for consistency
+  const { user: storeUser } = useStore();
+  const { user: authUser } = useAuth();
+  
+  // Use store user first, fallback to auth user
+  const user = storeUser || authUser;
+  
+  console.log('Dashboard user (from useStore):', storeUser);
+  console.log('Dashboard user (from useAuth):', authUser);
+  console.log('Final user:', user);
+  
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

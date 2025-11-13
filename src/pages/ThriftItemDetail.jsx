@@ -6,7 +6,6 @@ import {
   MessageCircle,
   Share2,
   ArrowLeft,
-  Star,
   Eye,
   Calendar,
   Shield,
@@ -46,13 +45,13 @@ export default function ThriftItemDetail() {
   useEffect(() => {
     if (!id) return;
     loadItemDetails(id);
-    // reset gallery on route change
     setCurrentImageIndex(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function ensureAuth() {
     try {
-      await me?.(); // returns 200 if logged in
+      await me?.();
       return true;
     } catch {
       toast.error("Please login to continue");
@@ -86,11 +85,12 @@ export default function ThriftItemDetail() {
         views: Number(itemData.views ?? 0),
         createdAt: itemData.createdAt || itemData.created_at || new Date().toISOString(),
         sellerId: itemData.sellerId || itemData.seller_id || itemData.user_id,
+        title: itemData.title || itemData.name || "Untitled item",
       };
 
       setItem(normalized);
 
-      // Load seller (guard missing sellerId)
+      // Load seller if available
       if (normalized.sellerId && api.getSellerProfile) {
         const sellerData = await api.getSellerProfile(normalized.sellerId);
         setSeller(sellerData || null);
@@ -98,7 +98,7 @@ export default function ThriftItemDetail() {
         setSeller(null);
       }
 
-      // Related items
+      // Related items (if API provides)
       if (api.getThriftRecommendations) {
         const related = await api.getThriftRecommendations(user?.id || "", normalized.id);
         setRelatedItems(Array.isArray(related) ? related : []);
@@ -117,7 +117,6 @@ export default function ThriftItemDetail() {
     const ok = await ensureAuth();
     if (!ok || !item) return;
 
-    // optimistic update
     toggleThriftLike(itemId);
     try {
       if (api.toggleThriftLike) {
@@ -127,8 +126,7 @@ export default function ThriftItemDetail() {
       }
       toast.success(isLiked ? "Removed from likes" : "Added to likes");
     } catch (error) {
-      // revert
-      toggleThriftLike(itemId);
+      toggleThriftLike(itemId); // revert
       console.error(error);
       toast.error("Failed to update like");
     }
@@ -178,11 +176,14 @@ export default function ThriftItemDetail() {
       case "new":
         return "bg-green-100 text-green-800";
       case "like-new":
-        return "bg-blue-100 text-blue-800";
+      case "like new":
+      case "like-new":
+      case "like_new":
+        return "bg-yellow-50 text-yellow-800";
       case "good":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-blue-50 text-blue-800";
       case "fair":
-        return "bg-orange-100 text-orange-800";
+        return "bg-orange-50 text-orange-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -190,7 +191,8 @@ export default function ThriftItemDetail() {
 
   function formatCondition(condition) {
     return String(condition || "Unknown")
-      .split("-")
+      .replace(/[-_]/g, " ")
+      .split(" ")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
   }
@@ -202,7 +204,7 @@ export default function ThriftItemDetail() {
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="aspect-square bg-gray-200 rounded-2xl"></div>
+              <div className="aspect-[4/5] bg-gray-200 rounded-2xl"></div>
               <div className="space-y-4">
                 <div className="h-8 bg-gray-200 rounded w-3/4"></div>
                 <div className="h-6 bg-gray-200 rounded w-1/2"></div>
@@ -241,161 +243,141 @@ export default function ThriftItemDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Back Button */}
+      <div className="max-w-7xl mx-auto px-6 py-10">
         <Link
           to="/thrift"
-          className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-8 transition-colors"
+          className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
           <span>Back to Thrift Store</span>
         </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-          {/* Image Gallery */}
-          <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-12">
+          {/* Gallery */}
+          <div>
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="aspect-square bg-white rounded-2xl overflow-hidden shadow-lg"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-2xl overflow-hidden shadow-lg"
             >
               {gallery.length ? (
-                <img
-                  src={gallery[safeIndex]}
-                  alt={item.name || "Thrift item"}
-                  className="w-full h-full object-cover"
-                  onError={(e) => (e.currentTarget.style.display = "none")}
-                />
+                <div className="relative">
+                  <img
+                    src={gallery[safeIndex]}
+                    alt={item.title || "Thrift item"}
+                    className="w-full aspect-[4/5] object-cover"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                  />
+                  <div className="absolute top-4 left-4">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getConditionColor(item.condition)}`}>
+                      {formatCondition(item.condition)}
+                    </span>
+                  </div>
+                </div>
               ) : (
-                <div className="w-full h-full grid place-items-center text-gray-400">
+                <div className="w-full aspect-[4/5] grid place-items-center text-gray-400">
                   No image
                 </div>
               )}
             </motion.div>
 
             {gallery.length > 1 && (
-              <div className="flex space-x-2 overflow-x-auto">
-                {gallery.map((image, index) => (
+              <div className="mt-4 flex gap-3 overflow-x-auto">
+                {gallery.map((img, idx) => (
                   <button
-                    key={`${image}-${index}`}
-                    onClick={() => setCurrentImageIndex(index)}
-                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
-                      safeIndex === index
-                        ? "border-purple-600"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
+                    key={`${img}-${idx}`}
+                    onClick={() => setCurrentImageIndex(idx)}
+                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${safeIndex === idx ? "border-purple-600" : "border-gray-200 hover:border-gray-300"}`}
+                    aria-label={`View image ${idx + 1}`}
                   >
-                    <img src={image} alt={`${item.name || "Thrift"} ${index + 1}`} className="w-full h-full object-cover" />
+                    <img src={img} alt={`${item.title} ${idx + 1}`} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Item Details */}
+          {/* Details */}
           <div className="space-y-6">
-            <div>
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                    {item.name || item.title || "Untitled item"}
-                  </h1>
-                  <div className="flex items-center space-x-4 text-sm text-gray-600">
-                    <div className="flex items-center space-x-1">
-                      <Eye className="h-4 w-4" />
-                      <span>{Number(item.views ?? 0)} views</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Heart className="h-4 w-4" />
-                      <span>{Number(item.likes ?? item.likes_count ?? 0)} likes</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>
-                        {new Date(item.createdAt || item.created_at || Date.now()).toLocaleDateString()}
-                      </span>
-                    </div>
+            <div className="flex items-start justify-between">
+              <div className="pr-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">{item.title}</h1>
+
+                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  <div className="flex items-center space-x-1">
+                    <Eye className="h-4 w-4" />
+                    <span>{Number(item.views ?? 0)} views</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Heart className="h-4 w-4" />
+                    <span>{Number(item.likes ?? 0)} likes</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Calendar className="h-4 w-4" />
+                    <span>{new Date(item.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
+              </div>
 
-                <div className="text-right">
-                  <div className="text-3xl font-bold text-gray-900 mb-2">
-                    ${Number(item.price || item.amount || 0).toFixed(2)}
-                  </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${getConditionColor(
-                      item.condition
-                    )}`}
-                  >
+              <div className="text-right">
+                <div className="text-3xl font-extrabold text-gray-900">${Number(item.price || 0).toFixed(2)}</div>
+                <div className="mt-3">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getConditionColor(item.condition)}`}>
                     {formatCondition(item.condition)}
                   </span>
                 </div>
               </div>
-
-              {/* Item Info */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <span className="text-sm text-gray-600">Size</span>
-                  <div className="font-medium text-gray-900">{item.size || "—"}</div>
-                </div>
-                <div>
-                  <span className="text-sm text-gray-600">Category</span>
-                  <div className="font-medium text-gray-900">{item.category || "—"}</div>
-                </div>
-                <div>
-                  <span className="text-sm text-gray-600">Color</span>
-                  <div className="font-medium text-gray-900">{item.color || "—"}</div>
-                </div>
-                <div>
-                  <span className="text-sm text-gray-600">Gender</span>
-                  <div className="font-medium text-gray-900 capitalize">{item.gender || "—"}</div>
-                </div>
-              </div>
-
-              {/* Description */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
-                <p className="text-gray-700 leading-relaxed">
-                  {item.description || "Pre-loved fashion item."}
-                </p>
-              </div>
-
-              {/* Tags */}
-              {Array.isArray(item.tags) && item.tags.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">Tags</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {item.tags.map((tag, index) => (
-                      <span
-                        key={`${tag}-${index}`}
-                        className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
-                      >
-                        #{String(tag)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-4">
-              <div className="flex space-x-4">
+            {/* Key meta */}
+            <div className="grid grid-cols-2 gap-4 bg-white border border-gray-100 rounded-lg p-4">
+              <div>
+                <div className="text-sm text-gray-500">Size</div>
+                <div className="font-medium text-gray-900">{item.size || "—"}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Category</div>
+                <div className="font-medium text-gray-900">{item.category || "—"}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Color</div>
+                <div className="font-medium text-gray-900">{item.color || "—"}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">Gender</div>
+                <div className="font-medium text-gray-900 capitalize">{item.gender || "—"}</div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="bg-white border border-gray-100 rounded-lg p-4">
+              <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
+              <p className="text-gray-700 leading-relaxed">{item.description || "Pre-loved fashion item."}</p>
+            </div>
+
+            {/* Tags */}
+            {Array.isArray(item.tags) && item.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {item.tags.map((tag, idx) => (
+                  <span key={`${tag}-${idx}`} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">#{String(tag)}</span>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="space-y-3">
+              <div className="flex gap-3">
                 <button
                   onClick={handleLike}
-                  className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 ${
-                    isLiked
-                      ? "bg-red-500 text-white hover:bg-red-600"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
+                  className={`flex-1 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-3 ${isLiked ? "bg-red-500 text-white hover:bg-red-600" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                 >
-                  <Heart className={`h-5 w-5 ${isLiked ? "fill-current" : ""}`} />
+                  <Heart className="h-5 w-5" />
                   <span>{isLiked ? "Liked" : "Like"}</span>
                 </button>
 
                 <button
                   onClick={handleShare}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 flex items-center justify-center gap-3"
                 >
                   <Share2 className="h-5 w-5" />
                   <span>Share</span>
@@ -404,22 +386,23 @@ export default function ThriftItemDetail() {
 
               <button
                 onClick={handleStartChat}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-colors flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-[#7C3AED] via-[#4F46E5] to-[#06B6D4] text-white py-3 rounded-lg font-semibold hover:from-[#6B21A8] hover:to-[#0891B2] transition"
               >
-                <MessageCircle className="h-5 w-5" />
-                <span>Chat with Seller</span>
+                <div className="flex items-center justify-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  <span>Chat with Seller</span>
+                </div>
               </button>
             </div>
 
-            {/* Trust & Safety */}
+            {/* Trust box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
+              <div className="flex items-start gap-3">
                 <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div>
                   <h4 className="font-medium text-blue-900 mb-1">Trust & Safety</h4>
                   <p className="text-sm text-blue-700">
-                    All items are reviewed before listing. Meet in public places and inspect items
-                    before purchase.
+                    All items are reviewed before listing. Meet in public places and inspect items before purchase.
                   </p>
                 </div>
               </div>
@@ -427,7 +410,7 @@ export default function ThriftItemDetail() {
           </div>
         </div>
 
-        {/* Seller Profile */}
+        {/* Seller */}
         {seller && (
           <div className="mb-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">About the Seller</h2>
@@ -435,13 +418,17 @@ export default function ThriftItemDetail() {
           </div>
         )}
 
-        {/* Related Items */}
+        {/* Related */}
         {relatedItems?.length > 0 && (
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">You might also like</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {relatedItems.map((relatedItem, index) => (
-                <ThriftCard key={relatedItem.id || relatedItem._id || index} item={relatedItem} index={index} />
+              {relatedItems.map((relatedItem, idx) => (
+                <ThriftCard
+                  key={relatedItem.id || relatedItem._id || idx}
+                  item={relatedItem}
+                  index={idx}
+                />
               ))}
             </div>
           </div>

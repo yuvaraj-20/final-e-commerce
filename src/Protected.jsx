@@ -1,6 +1,6 @@
 // src/Protected.jsx
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 
 /**
@@ -9,9 +9,9 @@ import { useAuth } from "./context/AuthContext";
  */
 export default function Protected({ children, allow = [] }) {
   const { user, isLoggedIn, checkedOnce } = useAuth();
+  const location = useLocation();
 
   if (!checkedOnce) {
-    // Still verifying session
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="animate-pulse text-gray-500">Checking authentication…</div>
@@ -20,13 +20,22 @@ export default function Protected({ children, allow = [] }) {
   }
 
   if (!isLoggedIn) {
-    return <Navigate to={`/login?next=${encodeURIComponent(window.location.pathname)}`} replace />;
+    // 🔹 Redirect to login, preserving original location
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location }}
+        replace
+      />
+    );
   }
 
   if (allow.length > 0) {
     const role = String(user?.role || "").toLowerCase();
     const normalizedAllow = allow.map((r) =>
-      r.toLowerCase() === "user" ? "customer" : r.toLowerCase() === "dealer" ? "seller" : r.toLowerCase()
+      r.toLowerCase() === "user" ? "customer" : 
+      r.toLowerCase() === "dealer" ? "seller" : 
+      r.toLowerCase()
     );
 
     if (!normalizedAllow.includes(role)) {

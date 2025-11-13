@@ -21,6 +21,8 @@ import Seller from "./pages/Seller";
 import MonoFit from "./pages/MonoFit";
 import About from "./components/home/About";
 import Cart from "./pages/Cart";
+import Checkout from "./components/checkout/Checkout.jsx";
+import OrderSuccess from "./components/checkout/OrderSuccess.jsx";
 import Dashboard from "./pages/DashBoard";
 import Wishlist from "./pages/Wishlist";
 import MixMatch from "./pages/MixMatch";
@@ -32,7 +34,7 @@ import AdminDashboard from "./components/dashboard/admin/AdminDashboard";
 import UploadForm from "./components/thrift/UploadForm"; // seller upload page
 // import ThriftCommunityFeed from "./pages/ThriftCommunityFeed"; // thrift feed
 import SearchResults from "./pages/SearchResults";
-import ThriftSell from "./pages/ThriftSell"
+import ThriftSell from "./pages/ThriftSell";
 import Chat from "./pages/Chat";
 import TrustSafety from "./pages/TrustSafety";
 
@@ -127,13 +129,13 @@ function AppContent() {
             }
           />
           <Route
-  path="/thrift/sell"
-  element={
-    <Protected allow={["seller", "admin"]}>
-      <ThriftSell />
-    </Protected>
-  }
-/>
+            path="/thrift/sell"
+            element={
+              <Protected allow={["seller", "admin"]}>
+                <ThriftSell />
+              </Protected>
+            }
+          />
 
           {/* 👥 Seller */}
           <Route path="/seller/:sellerId" element={<Seller />} />
@@ -157,6 +159,25 @@ function AppContent() {
               </Protected>
             }
           />
+
+          {/* 🛒 Checkout */}
+          <Route
+            path="/checkout"
+            element={
+              <Protected allow={["user", "seller", "admin"]}>
+                <Checkout />
+              </Protected>
+            }
+          />
+          <Route
+            path="/checkout/success"
+            element={
+              <Protected allow={["user", "seller", "admin"]}>
+                <OrderSuccess />
+              </Protected>
+            }
+          />
+
           <Route
             path="/admin/dashboard"
             element={

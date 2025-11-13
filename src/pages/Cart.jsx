@@ -1,57 +1,65 @@
 // src/pages/Cart.jsx
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../store/useStore";
 import { me, api } from "../lib/apiClient";
-import CartSummary from "../components/cart/CartSummary";
+
 import CartItem from "../components/cart/CartItem";
-import PromoCode from "../components/cart/PromoCode";
-import RecommendedItems from "../components/cart/RecommendedItems"; // <- import
+import CartSummary from "../components/cart/CartSummary";
+import RecommendedItems from "../components/cart/RecommendedItems";
 
 const Cart = () => {
   const navigate = useNavigate();
-  const {
-    cart,
-    setCart,
-    removeFromCart,
-    clearCart,
-    loadGuestCart,
-    mergeGuestCart,
-  } = useStore();
+  const { cart, setCart, loadGuestCart } = useStore();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isCheckingOut, setIsCheckingOut] = useState(false); // <- new
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
+  // 🧭 Initialize cart and merge guest data
   useEffect(() => {
     const initCart = async () => {
+      setLoading(true);
       try {
         const user = await me();
         setIsLoggedIn(!!user?.id);
 
         const guestCart = loadGuestCart();
-
-        if (guestCart.length > 0) {
+        if (Array.isArray(guestCart) && guestCart.length > 0) {
           toast("Merging your guest cart...");
           await Promise.all(
             guestCart.map((item) =>
               api.post("/api/cart/items", {
-                product_id: item.product?.id,
-                quantity: item.quantity,
+                product_id: item.product?.id ?? item.id,
+                quantity: item.quantity ?? 1,
               })
             )
           );
           localStorage.removeItem("guestCart");
         }
 
-        const { data } = await api.get("/api/cart");
-        setCart(data.items || []);
-      } catch {
+        const resp = await api.get("/api/cart");
+        const payload = resp?.data ?? resp;
+
+        let normalized = [];
+        if (Array.isArray(payload)) normalized = payload;
+        else if (payload?.items) normalized = payload.items;
+        else if (payload?.cart?.items) normalized = payload.cart.items;
+        else if (payload?.data) normalized = payload.data;
+        else {
+          console.warn("Unexpected /api/cart shape:", payload);
+          normalized =
+            Object.values(payload || {}).find((v) => Array.isArray(v)) ?? [];
+        }
+
+        setCart(Array.isArray(normalized) ? normalized : []);
+      } catch (err) {
+        console.warn("Failed to load server cart, using guest cart", err);
         const guestCart = loadGuestCart();
-        setCart(guestCart);
+        setCart(Array.isArray(guestCart) ? guestCart : []);
       } finally {
         setLoading(false);
       }
@@ -60,46 +68,87 @@ const Cart = () => {
     initCart();
   }, [setCart, loadGuestCart]);
 
+  // 🧩 Remove item handler
   const handleRemove = async (id) => {
     try {
       if (isLoggedIn) {
-        await api.delete(`/api/cart/items/${id}`);
-        const { data } = await api.get("/api/cart");
-        setCart(data.items || []);
+        try {
+          await api.delete(`/api/cart/items/${id}`);
+        } catch {
+          await api.delete(`/api/cart/items`, { params: { product_id: id } });
+        }
+
+        const resp = await api.get("/api/cart");
+        const payload = resp?.data ?? resp;
+        const items =
+          payload?.items ??
+          payload?.cart?.items ??
+          (Array.isArray(payload) ? payload : []);
+        setCart(Array.isArray(items) ? items : []);
       } else {
-        const updated = cart.filter((item) => item.id !== id);
+        const updated = cart.filter(
+          (i) => i.id !== id && i.product?.id !== id
+        );
         localStorage.setItem("guestCart", JSON.stringify(updated));
         setCart(updated);
       }
+
       toast.success("Removed from cart");
     } catch (err) {
+      console.error("Remove failed:", err);
       toast.error("Failed to remove item");
     }
   };
 
-  const total = cart.reduce(
-    (sum, item) => sum + Number(item.product?.price || 0) * (item.quantity || 1),
-    0
-  );
+  // 🧮 Update quantity handler (sync with backend or localStorage)
+  const handleQuantityChange = async (id, newQty) => {
+    const updated = cart.map((i) =>
+      i.id === id || i.product?.id === id ? { ...i, quantity: newQty } : i
+    );
+    setCart(updated);
 
-  // Checkout handler now sets isCheckingOut while routing
+    if (isLoggedIn) {
+      try {
+        await api.patch(`/api/cart/items/${id}`, { quantity: newQty });
+      } catch (err) {
+        console.warn("Server quantity update failed:", err);
+      }
+    } else {
+      localStorage.setItem("guestCart", JSON.stringify(updated));
+    }
+  };
+
+  // 🧾 Checkout flow
   const handleCheckout = () => {
+    if (isCheckingOut) return;
     setIsCheckingOut(true);
 
     if (!isLoggedIn) {
-      toast("Please log in to continue checkout");
-      // next param helps return to cart after login
-      navigate("/login?next=/cart");
-      setIsCheckingOut(false); // reset because user will be navigated to login
+      toast.error("Please log in to continue checkout");
+      setTimeout(() => {
+        setIsCheckingOut(false);
+        navigate("/login?next=/cart");
+      }, 800);
       return;
     }
 
-    // If logged in - navigate to checkout
-    navigate("/checkout");
-    // no need to immediately set false, because we're navigating away.
-    // If you want a spinner before navigation while you call an API, keep it true until that finishes.
+    if (!cart || cart.length === 0) {
+      toast.error("Your cart is empty");
+      setIsCheckingOut(false);
+      return;
+    }
+
+    try {
+      toast.success("Redirecting to checkout...");
+      navigate("/checkout");
+    } catch (err) {
+      console.error("Checkout navigation failed:", err);
+      toast.error("Could not start checkout");
+      setIsCheckingOut(false);
+    }
   };
 
+  // 🌀 Loading state
   if (loading)
     return (
       <div className="min-h-screen flex justify-center items-center text-gray-500">
@@ -107,79 +156,57 @@ const Cart = () => {
       </div>
     );
 
+  // 🧱 Empty cart
+  if (!Array.isArray(cart) || cart.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 text-gray-500">
+        <ShoppingBag className="h-16 w-16 text-gray-400 mb-4" />
+        <p className="mb-6">Your cart is empty</p>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          onClick={() => navigate("/")}
+          className="bg-purple-600 text-white px-6 py-3 rounded-full font-semibold shadow-md hover:bg-purple-700 transition"
+        >
+          Continue Shopping
+        </motion.button>
+      </div>
+    );
+  }
+
+  // ✅ Main Render
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-gray-900">Your Cart</h1>
 
         <AnimatePresence>
-          {cart.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20"
-            >
-              <ShoppingBag className="h-16 w-16 text-gray-400 mb-4" />
-              <p className="text-gray-500 mb-6">Your cart is empty</p>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                onClick={() => navigate("/")}
-                className="bg-purple-600 text-white px-6 py-3 rounded-full font-semibold shadow-md hover:bg-purple-700 transition"
-              >
-                Continue Shopping
-              </motion.button>
-            </motion.div>
-          ) : (
-            // TWO-COLUMN LAYOUT: left = cart items, right = CartSummary
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* LEFT: items list (span 2 on large screens) */}
-              <div className="lg:col-span-2 bg-white rounded-2xl shadow-md p-6">
-                {cart.map((item) => (
-                  <motion.div
-                    key={item.id}
-                    layout
-                    className="flex items-center justify-between border-b border-gray-200 py-4 last:border-0"
-                  >
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={item.product?.image || "/placeholder.png"}
-                        alt={item.product?.title}
-                        className="w-20 h-20 rounded-lg object-cover"
-                      />
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {item.product?.title}
-                        </h3>
-                        <p className="text-gray-500 text-sm">
-                          {item.store || "Main Store"} — {item.size || "M"}
-                        </p>
-                        <p className="text-purple-600 font-medium">
-                          ${item.product?.price} × {item.quantity}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleRemove(item.id)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* RIGHT: summary panel (CartSummary) */}
-              <div>
-                <CartSummary
-                  onCheckout={handleCheckout}      // <- wired here
-                  isCheckingOut={isCheckingOut}    // <- spinner state
-                  appliedPromo={null}              // pass promo if you have one
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* LEFT: Cart Items */}
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-md p-6 space-y-4">
+              {cart.map((item, index) => (
+                <CartItem
+                  key={item.id ?? item.product?.id ?? index}
+                  item={item}
+                  index={index}
+                  onQuantityChange={handleQuantityChange}
+                  onRemove={handleRemove}
                 />
-              </div>
+              ))}
             </div>
-          )}
+
+            {/* RIGHT: Summary */}
+            <div>
+              <CartSummary
+                onCheckout={handleCheckout}
+                isCheckingOut={isCheckingOut}
+                appliedPromo={null}
+              />
+            </div>
+          </div>
         </AnimatePresence>
+
+        {/* Suggested Items */}
+        <RecommendedItems />
       </div>
     </div>
   );

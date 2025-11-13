@@ -100,6 +100,34 @@ export async function del(path, opts = {}) {
   }
 }
 
+/* ========= Image URL helpers ========= */
+function joinUrl(base, path) {
+  if (!base) return path;
+  const b = base.endsWith('/') ? base.slice(0, -1) : base;
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${b}${p}`;
+}
+
+export function resolveImageUrl(u) {
+  if (!u) return u;
+  const s = String(u);
+  if (/^https?:\/\//i.test(s)) return s; // absolute web URL
+  if (s.startsWith('/storage') || s.startsWith('storage/')) {
+    const rel = s.startsWith('storage/') ? `/${s}` : s;
+    return joinUrl(API_BASE_URL, rel);
+  }
+  // fallback: treat as relative path on API host
+  return joinUrl(API_BASE_URL, s.startsWith('/') ? s : `/${s}`);
+}
+
+export function resolveImageArray(arr) {
+  const list = Array.isArray(arr) ? arr : [];
+  return list
+    .map((img) => (typeof img === 'string' ? img : img?.url))
+    .filter(Boolean)
+    .map(resolveImageUrl);
+}
+
 /* ========= Public API (signup/login/logout/me) ========= */
 export async function signup(payload) {
   const cleanPayload = { ...payload, role: mapRoleForBackend(payload.role) };
@@ -159,4 +187,6 @@ export default {
   login,
   logout,
   me,
+  resolveImageUrl,
+  resolveImageArray,
 };

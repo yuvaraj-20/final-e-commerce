@@ -20,6 +20,7 @@ import { toast } from "react-hot-toast";
 import { useStore } from "../store/useStore";
 import { useAuth } from "../context/AuthContext";
 import ProductCard from "../components/common/ProductCard";
+import { api } from "../lib/apiClient";
 
 /**
  * ProductDetail with improved "You may also like" recommendations.
@@ -83,19 +84,60 @@ const ProductDetail = () => {
   // Recommendation carousel ref
   const carouselRef = useRef(null);
 
-  // Find product and set defaults
-  useEffect(() => {
-    const found = (products || []).find((p) => String(p.id) === String(id)) || null;
-    setProduct(found);
-    if (found) {
-      const firstImg = found.images?.[0] || found.image || "";
-      setMainImage(firstImg);
-      if (found.sizes?.length) setSelectedSize(found.sizes[0]);
-      if (found.colors?.length) setSelectedColor(found.colors[0]);
+  // Normalize arrays from backend (can be JSON strings)
+  const normArray = (val) => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string") {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : (val ? [val] : []);
+      } catch {
+        return val ? [val] : [];
+      }
     }
-    // small delay for skeleton polish
-    const t = setTimeout(() => setLoading(false), 180);
-    return () => clearTimeout(t);
+    return [];
+  };
+
+  // Find product locally; if absent, fetch from backend
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    const local = (products || []).find((p) => String(p.id) === String(id)) || null;
+    if (local) {
+      if (!mounted) return;
+      setProduct(local);
+      const firstImg = normArray(local.images)[0] || local.image || "";
+      setMainImage(firstImg);
+      const sArr = normArray(local.sizes);
+      const cArr = normArray(local.colors);
+      if (sArr.length) setSelectedSize(sArr[0]);
+      if (cArr.length) setSelectedColor(cArr[0]);
+      const t = setTimeout(() => mounted && setLoading(false), 120);
+      return () => clearTimeout(t);
+    }
+
+    (async () => {
+      try {
+        const res = await api.get(`/api/products/${id}`);
+        const p = res?.data?.data || res?.data || null;
+        if (!mounted || !p) return;
+        setProduct(p);
+        const firstImg = normArray(p.images)[0] || p.image || "";
+        setMainImage(firstImg);
+        const sArr = normArray(p.sizes);
+        const cArr = normArray(p.colors);
+        if (sArr.length) setSelectedSize(sArr[0]);
+        if (cArr.length) setSelectedColor(cArr[0]);
+      } catch (e) {
+        // leave product as null; skeleton will switch to not found UI
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [id, products]);
 
   // track recently viewed in localStorage
@@ -256,6 +298,13 @@ const ProductDetail = () => {
 
   const isWishlisted = wishlist.includes(product.id);
 
+  // Safe arrays for UI mapping
+  const imagesArr = normArray(product?.images).length > 0
+    ? normArray(product?.images)
+    : (product?.image ? [product.image] : []);
+  const sizesArr = normArray(product?.sizes);
+  const colorsArr = normArray(product?.colors);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Top bar */}
@@ -298,7 +347,7 @@ const ProductDetail = () => {
 
           {/* Thumbnails */}
           <div className="grid grid-cols-5 gap-3 mt-4">
-            {(product.images?.length ? product.images : [product.image]).map((img, idx) => (
+            {imagesArr.map((img, idx) => (
               <button
                 key={idx}
                 onClick={() => setMainImage(img)}
@@ -339,14 +388,14 @@ const ProductDetail = () => {
           <p className="mt-4 text-gray-700 leading-relaxed">{product.description}</p>
 
           {/* Size */}
-          {product.sizes?.length > 0 && (
+          {sizesArr.length > 0 && (
             <div className="mt-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-medium">Size</span>
                 <button className="text-sm text-gray-500 hover:text-gray-700">Size guide</button>
               </div>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((s) => {
+                {sizesArr.map((s) => {
                   const active = selectedSize === s;
                   return (
                     <button
@@ -363,11 +412,11 @@ const ProductDetail = () => {
           )}
 
           {/* Color */}
-          {product.colors?.length > 0 && (
+          {colorsArr.length > 0 && (
             <div className="mt-6">
               <div className="font-medium mb-2">Color</div>
               <div className="flex flex-wrap gap-2">
-                {product.colors.map((c) => {
+                {colorsArr.map((c) => {
                   const active = selectedColor === c;
                   return (
                     <button

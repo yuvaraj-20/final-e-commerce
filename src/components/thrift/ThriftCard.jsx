@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 
 import { useStore } from "../../store/useStore";
 import { api } from "../../services/api";
-import { me } from "../../lib/apiClient";
+import { me, resolveImageArray } from "../../lib/apiClient";
 
 const ThriftCard = ({ item, index = 0 }) => {
   const { likedThriftItems, toggleThriftLike } = useStore();
@@ -38,11 +38,12 @@ const ThriftCard = ({ item, index = 0 }) => {
   };
 
   // Images can be: array of URLs, array of {url}, single string
-  const images = Array.isArray(item?.images)
-    ? item.images.map((img) => (typeof img === "string" ? img : img?.url)).filter(Boolean)
+  const rawImages = Array.isArray(item?.images)
+    ? item.images
     : typeof item?.image === "string"
     ? [item.image]
     : [];
+  const images = resolveImageArray(rawImages);
   const firstImg = images?.[0] || null;
 
   const tags = Array.isArray(item?.tags) ? item.tags : [];

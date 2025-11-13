@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 
-import { api } from "../services/api";
+import { api as http } from "../lib/apiClient";
 import ProductCard from "../components/common/ProductCard";
 import ThriftCard from "../components/thrift/ThriftCard";
 import SellerCard from "../pages/SellerCard";
@@ -53,9 +53,21 @@ const SearchResults = () => {
 
     setLoading(true);
     try {
-      const resp = await api.search({ q, tab, page: p, pageSize: PAGE_SIZE });
-      const items = resp?.items ?? [];
-      const pag = resp?.pagination ?? { page: p, total: items.length, totalPages: 1 };
+      let items = [];
+      let pag = { page: p, total: 0, totalPages: 0 };
+
+      if (tab === "products") {
+        const res = await http.get("/api/products", { params: { search: q, page: p, per_page: PAGE_SIZE } });
+        const data = res?.data;
+        items = data?.data || data || [];
+        const meta = data?.meta || {};
+        pag = { page: meta.current_page || p, total: meta.total || (items?.length || 0), totalPages: meta.last_page || 1 };
+      } else {
+        // fallback to existing mock service for non-product tabs for now
+        const resp = await (await import("../services/api")).api.search({ q, tab, page: p, pageSize: PAGE_SIZE });
+        items = resp?.items ?? [];
+        pag = resp?.pagination ?? { page: p, total: items.length, totalPages: 1 };
+      }
 
       setResults((prev) => (reset ? items : [...prev, ...items]));
       setPagination(pag);

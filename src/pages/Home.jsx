@@ -19,19 +19,28 @@ import ProductCard from '../components/common/ProductCard';
 import HeroCarousel from '../components/home/HeroCarousel';
 import { useStore } from '../store/useStore';
 import { useAuth } from '../context/AuthContext'; // Add authentication
-import { api } from '../services/api';
+import { api as http } from '../lib/apiClient';
 import NewArrivalsCarousel from '../components/home/NewArrivalsCarousel';
-import About from '../components/home/About';
 
 const Home = () => {
   const { products, setProducts } = useStore();
   const { requireAuth, isLoggedIn, user } = useAuth(); // Add authentication hook
   const [cart, setCart] = useState([]);
   const [wishlist, setWishlist] = useState([]);
-  const navigate = useNavigate(); // <-- added to navigate programmatically
+  const navigate = useNavigate(); 
 
   useEffect(() => {
-    api.getProducts().then(setProducts);
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await http.get('/api/products', { params: { per_page: 24 } });
+        const items = res?.data?.data || res?.data || [];
+        if (mounted) setProducts(items);
+      } catch (e) {
+        // ignore; sections gracefully handle empty
+      }
+    })();
+    return () => { mounted = false; };
   }, [setProducts]);
 
   // -------------------------

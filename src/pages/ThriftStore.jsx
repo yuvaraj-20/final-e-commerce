@@ -17,8 +17,7 @@ import UploadForm from "../components/thrift/UploadForm";
 import FilterSortPanel from "../components/FilterSortPanel";
 
 import { useStore } from "../store/useStore";
-import { api } from "../services/api";
-import { me } from "../lib/apiClient";
+import { api as http, me } from "../lib/apiClient";
 
 import { THRIFT_FILTERS, UNIVERSAL_SORTS } from "../config/filters";
 import { mergeIncomingFilters } from "../utils/filtering";
@@ -31,6 +30,7 @@ const ThriftStore = () => {
     setThriftFilters,
     resetThriftFilters,
     addToCart,
+    setUser,
   } = useStore();
 
   const navigate = useNavigate();
@@ -48,8 +48,72 @@ const ThriftStore = () => {
   const loadThriftItems = async () => {
     setIsLoading(true);
     try {
-      const items = await api.getThriftItems(thriftFilters);
-      setThriftItems(items || []);
+      // normalize arrays from backend (can be JSON strings)
+      const normArray = (val) => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === "string") {
+          try {
+            const parsed = JSON.parse(val);
+            return Array.isArray(parsed) ? parsed : (val ? [val] : []);
+          } catch {
+            return val ? [val] : [];
+          }
+        }
+        return [];
+      };
+
+      // Attempt backend fetch first
+      let resp;
+      try {
+        resp = await http.get("/api/thrift/items", {
+          params: {
+            search: thriftFilters.search || "",
+            gender: thriftFilters.gender && thriftFilters.gender !== "all" ? thriftFilters.gender : undefined,
+            category: thriftFilters.category && thriftFilters.category !== "all" ? thriftFilters.category : undefined,
+            condition: thriftFilters.condition && thriftFilters.condition !== "all" ? thriftFilters.condition : undefined,
+            size: thriftFilters.size && thriftFilters.size !== "all" ? thriftFilters.size : undefined,
+            sort: thriftFilters.sortBy || "newest",
+          },
+        });
+      } catch (e) {
+        resp = null; // backend may not have index yet
+      }
+
+      let itemsRaw = [];
+      if (resp && resp.data) {
+        itemsRaw = Array.isArray(resp.data?.data) ? resp.data.data : Array.isArray(resp.data) ? resp.data : [];
+      } else {
+        // fallback to mock API
+        const mockMod = await import("../services/api");
+        itemsRaw = await mockMod.api.getThriftItems(thriftFilters);
+      }
+
+      const mapped = (itemsRaw || []).map((it) => {
+        const images = normArray(it.images);
+        return {
+          id: it.id,
+          name: it.name || it.title || "",
+          title: it.name || it.title || "",
+          description: it.description || "",
+          price: it.price,
+          category: it.category || "",
+          size: it.size || it.sizes?.[0] || "",
+          condition: it.condition || "",
+          gender: it.gender || "",
+          color: it.color || (normArray(it.colors)[0] || ""),
+          tags: normArray(it.tags),
+          images,
+          image: images[0] || it.image || "",
+          likes: it.likes_count ?? it.likes ?? 0,
+          views: it.views ?? 0,
+          isBoosted: it.is_boosted ?? it.isBoosted ?? false,
+          sellerId: it.user_id || it.seller_id || it.sellerId,
+          sellerName: it.user?.name || it.sellerName || "",
+          sellerAvatar: it.user?.avatar_url || it.sellerAvatar || "",
+        };
+      });
+
+      setThriftItems(mapped);
     } catch {
       toast.error("Failed to load thrift items");
     } finally {
@@ -69,7 +133,8 @@ const ThriftStore = () => {
 
   const ensureAuth = async (nextPath = "/thrift") => {
     try {
-      await me();
+      const u = await me();
+      if (u) setUser(u);
       return true;
     } catch {
       toast.error("Please sign in to continue");
@@ -305,7 +370,7 @@ const ThriftStore = () => {
                   <p className="text-sm text-gray-500">${item.price}</p>
 
                   <div
-                    onClick={() => navigate(`/seller/${item.sellerId}`)}
+                    onClick={() => item.sellerId && navigate(`/seller/${item.sellerId}`)}
                     className="mt-3 flex items-center gap-2 cursor-pointer group"
                   >
                     <img
@@ -368,10 +433,10 @@ const ThriftStore = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {thriftItems
-                .filter((item) => item.isBoosted)
-                .slice(0, 4)
-                .map((item, index) => (
+              {(() => {
+                const boosted = thriftItems.filter((it) => it.isBoosted);
+                const pool = boosted.length > 0 ? boosted : [...thriftItems].sort(() => Math.random() - 0.5);
+                return pool.slice(0, 4).map((item, index) => (
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, y: 12 }}
@@ -394,7 +459,7 @@ const ThriftStore = () => {
                       <p className="text-sm text-gray-500">${item.price}</p>
 
                       <div
-                        onClick={() => navigate(`/seller/${item.sellerId}`)}
+                        onClick={() => item.sellerId && navigate(`/seller/${item.sellerId}`)}
                         className="mt-3 flex items-center gap-2 cursor-pointer group"
                       >
                         <img
@@ -409,7 +474,8 @@ const ThriftStore = () => {
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                ));
+              })()}
             </div>
           </div>
         )}

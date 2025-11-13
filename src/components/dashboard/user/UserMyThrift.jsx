@@ -2,32 +2,52 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Eye, Edit, Trash2, TrendingUp, Clock, CheckCircle, X, Package } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../../../services/api';
+import { get as httpGet, ensureCsrf, del as httpDelete, resolveImageArray, me, readXsrfToken } from '../../../lib/apiClient';
 import { useStore } from '../../../store/useStore';
 import UploadForm from '../../thrift/UploadForm';
 import toast from 'react-hot-toast';
 
 const UserMyThrift = () => {
-  const { user } = useStore();
+  const { user, setUser } = useStore();
   const [myItems, setMyItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('all');
 
   useEffect(() => {
-    if (user) {
-      loadMyItems();
-    }
-  }, [user]);
+    // Run on mount and whenever user id changes
+    loadMyItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const loadMyItems = async () => {
-    if (!user) return;
-    
+    // Ensure we have a valid user id; fetch from backend if needed
+    let uid = user?.id ?? user?.user?.id;
+    if (!uid) {
+      try {
+        const u = await me();
+        uid = u?.id ?? u?.user?.id;
+        if (uid) setUser(u?.user || u);
+      } catch (e) {
+        return; // not logged in
+      }
+    }
+
+    if (!uid) return;
+
     setIsLoading(true);
     try {
-      const data = await api.getUserThriftItems(user.id);
-      setMyItems(data);
+      // Ask backend to return only current user's items
+      const res = await httpGet('/api/thrift/items', { params: { user_id: uid, per_page: 100 } });
+      const list = Array.isArray(res?.data) ? res.data : [];
+      setMyItems(list);
     } catch (error) {
       console.error('Failed to load items:', error);
+      // Fallback to mock data if backend fails
+      try {
+        const mock = await api.getUserThriftItems(uid);
+        setMyItems(Array.isArray(mock) ? mock : []);
+      } catch {}
     } finally {
       setIsLoading(false);
     }
@@ -37,11 +57,18 @@ const UserMyThrift = () => {
     if (!confirm('Are you sure you want to delete this item?')) return;
 
     try {
-      await api.deleteThriftItem(itemId, user.id);
-      setMyItems(prev => prev.filter(item => item.id !== itemId));
+      // Ensure CSRF cookie present (sanctum)
+      await ensureCsrf();
+      await httpDelete(`/api/thrift/items/${itemId}`, {
+        params: { user_id: user?.id ?? user?.user?.id },
+        headers: { 'X-XSRF-TOKEN': readXsrfToken() },
+      }); // must be authenticated
+      setMyItems((prev) => prev.filter((it) => it.id !== itemId));
       toast.success('Item deleted successfully!');
     } catch (error) {
-      toast.error('Failed to delete item');
+      console.error('Failed to delete item:', error);
+      const msg = error?.response?.data?.message || 'Failed to delete item';
+      toast.error(msg);
     }
   };
 
@@ -214,7 +241,7 @@ const UserMyThrift = () => {
           >
             <div className="relative">
               <img
-                src={item.images[0]}
+                src={resolveImageArray(Array.isArray(item.images) ? item.images : [item.image]).filter(Boolean)[0]}
                 alt={item.name}
                 className="w-full h-48 object-cover"
               />

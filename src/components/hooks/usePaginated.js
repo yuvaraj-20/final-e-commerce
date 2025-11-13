@@ -78,7 +78,7 @@ export default function usePaginated(url, deps = [], options = {}) {
 
     try {
       const res = await api.get(url, {
-        params: { page, page_size: pageSize, ...mergedParams },
+        params: { page, per_page: pageSize, ...mergedParams },
         signal,
       });
 

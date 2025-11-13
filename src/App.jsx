@@ -40,7 +40,6 @@ import { useStore } from "./store/useStore";
 import { me } from "./lib/apiClient";
 import {
   mockUser,
-  mockProducts,
   mockThriftItems,
   mockMonofitCombos,
 } from "./components/data/mockData";
@@ -88,7 +87,6 @@ function AppContent() {
 
   useEffect(() => {
     setUser((prev) => prev ?? mockUser);
-    setProducts(mockProducts);
     setThriftItems(mockThriftItems);
     setMonofitCombos(mockMonofitCombos);
   }, [setUser, setProducts, setThriftItems, setMonofitCombos]);

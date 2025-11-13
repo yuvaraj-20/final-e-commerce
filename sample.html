@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Founder • Company • Achievements</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f9fafb;
+      --card:#ffffff;
+      --accent:#4f46e5;
+      --muted:#4b5563;
+      --border:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background:var(--bg);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:32px;
+      color:#111827;
+    }
+
+    .container{
+      width:100%;
+      max-width:980px;
+      border-radius:18px;
+      background:var(--card);
+      padding:28px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      display:grid;
+      grid-template-columns: 320px 1fr;
+      gap:24px;
+      align-items:start;
+      border:1px solid var(--border);
+    }
+
+    .profile{
+      padding:18px;
+      border-radius:14px;
+      background:#f3f4f6;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      align-items:center;
+      text-align:center;
+    }
+    .avatar{
+      width:140px;height:140px;border-radius:50%;
+      overflow:hidden;border:4px solid #e5e7eb;
+      background: linear-gradient(135deg,var(--accent), #3b82f6);
+      display:flex;align-items:center;justify-content:center;
+      font-weight:800;font-size:40px;color:white;
+    }
+    .name{font-size:20px;font-weight:700;margin-top:4px}
+    .role{font-size:13px;color:var(--muted)}
+    .company-logo{height:40px; display:inline-flex; align-items:center; gap:8px;}
+    .company-logo img{height:34px}
+
+    .contact{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+    .btn{
+      padding:8px 12px;border-radius:10px;font-weight:600;font-size:13px;
+      background:linear-gradient(90deg,var(--accent), #3b82f6);border:none;color:white;cursor:pointer;
+    }
+    .ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+
+    .stats{display:flex;gap:10px;margin-top:8px}
+    .stat{background:#f9fafb;padding:10px;border-radius:10px;min-width:82px;border:1px solid var(--border)}
+    .stat h4{margin:0;font-size:14px}
+    .stat p{margin:0;color:var(--muted);font-size:12px}
+
+    .content{padding:6px 6px 6px 8px}
+    .headline{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .headline h1{margin:0;font-size:20px}
+    .bio{color:var(--muted);margin-top:10px;line-height:1.5}
+
+    .achievements{margin-top:16px}
+    .achievements h3{margin:0 0 8px 0;font-size:16px}
+    .list{display:grid;gap:10px}
+    .item{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:12px;background:#f9fafb;border:1px solid var(--border)}
+    .item .num{min-width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;color:white}
+    .item .info h4{margin:0;font-size:14px}
+    .item .info p{margin:4px 0 0 0;color:var(--muted);font-size:13px}
+
+    .timeline{margin-top:18px;padding:12px;border-radius:12px;background:#f9fafb;border:1px solid var(--border)}
+    .timeline h3{margin:0 0 12px 0}
+    .tl-item{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+    .dot{width:10px;height:10px;border-radius:99px;background:var(--accent);margin-top:6px}
+    .tl-item p{margin:0;color:var(--muted)}
+
+    .footer{display:flex;align-items:center;justify-content:space-between;margin-top:18px;color:var(--muted)}
+
+    @media (max-width:880px){
+      .container{grid-template-columns:1fr;}
+      .avatar{width:120px;height:120px}
+    }
+  </style>
+</head>
+<body>
+  <main class="container" role="main">
+    <aside class="profile" aria-label="Founder profile">
+      <img style="width: 240px; height: 240px;" src="https://ogrelix.org/logo-new.png"></img>
+      <div class="name">Kabil Preetham K</div>
+      <div class="role">Founder & CEO — Ogrelix</div>
+
+      <div class="company-logo">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)" opacity="0.15"/>
+          <path d="M6 12h12M12 6v12" stroke="#111827" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div style="font-weight:700">Ogrelix</div>
+      </div>
+
+      <div class="contact">
+        <button class="btn">Visit Website</button>
+        <button class="btn ghost">Contact</button>
+      </div>
+
+      <div class="stats" role="list">
+        <div class="stat" role="listitem"><h4>2+</h4><p>Years</p></div>
+        <div class="stat" role="listitem"><h4>20+</h4><p>Clients</p></div>
+        <div class="stat" role="listitem"><h4>30+</h4><p>Projects</p></div>
+      </div>
+       <img style="width: 240px; height: 240px;" src="data:image/jpeg;base64,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"></img>
+    </aside>
+
+    <section class="content">
+      <div class="headline">
+        <h1>About the Founder & Company</h1>
+      </div>
+
+      <p class="bio">Kabil Preetham K A, a self-directed cybersecurity professional and researcher, has independently delivered over 10 projects across web development, software engineering, and cyber consultancy. As the founder of Ogrelix, he leads a dynamic tech firm specializing in Web & App Development, Cybersecurity Consultancy, AI & ML solutions, and Blockchain innovations. Ogrelix is committed to transforming ideas into impactful digital solutions — from full-stack development and cloud-native applications to vulnerability assessments, custom AI copilots, and decentralized systems. With a strong foundation in research, open-source contributions, and strategic consulting, Ogrelix empowers businesses and innovators to build secure, intelligent, and future-ready technologies.</p>
+
+     <div class="achievements">
+  <h3>Key Achievements</h3>
+  <div class="list">
+    
+    <div class="item">
+      <div class="num" style="background:linear-gradient(135deg,var(--accent),#3b82f6);">1</div>
+      <div class="info">
+        <h4>Launched Institution Management System</h4>
+        <p>Delivered a full-featured IMS used by multiple colleges for attendance, fees, and research management.</p>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="num" style="background:linear-gradient(135deg,#f97316,#ef4444);">2</div>
+      <div class="info">
+        <h4>Scaled to 20+ Clients</h4>
+        <p>Expanded Ogrelix’s reach through strong product-market fit and successful outreach strategies.</p>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="num" style="background:linear-gradient(135deg,#10b981,#06b6d4);">3</div>
+      <div class="info">
+        <h4>Signed MoU with ASSR Emphorium</h4>
+        <p>Established a partnership for cybersecurity services and website development resources.</p>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="num" style="background:linear-gradient(135deg,#8b5cf6,#ec4899);">4</div>
+      <div class="info">
+        <h4>Deployed Ogrelix Catalyst</h4>
+        <p>Launched a career guidance platform empowering students with personalized insights and growth tools.</p>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="num" style="background:linear-gradient(135deg,#14b8a6,#3b82f6);">5</div>
+      <div class="info">
+        <h4>Research & MVP Development</h4>
+        <p>Successfully completed over 5 research-based MVPs driving innovation in academic and tech solutions.</p>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="num" style="background:linear-gradient(135deg,#facc15,#f59e0b);">6</div>
+      <div class="info">
+        <h4>Open-Source Contributions</h4>
+        <p>Published reusable tools and components that support developers in academic workflow automation.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+      
+      <div class="footer">
+        <div style="font-size:13px">Based in India • Remote-friendly</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost">LinkedIn</button>
+          <button class="btn ghost">Twitter</button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</body>
+</html>

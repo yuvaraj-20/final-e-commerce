@@ -182,8 +182,9 @@ const Products = () => {
     initialPage: 1,
     pageSize: 24,
     params: {
-      q: searchQuery || "",
-      filters: serializedFilters || "",
+      search: searchQuery || "",
+      min_price: Array.isArray(filters?.priceRange) ? filters.priceRange[0] : undefined,
+      max_price: Array.isArray(filters?.priceRange) ? filters.priceRange[1] : undefined,
       sort: sortBy || "name",
     },
   });

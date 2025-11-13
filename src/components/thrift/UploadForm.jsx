@@ -14,7 +14,7 @@ import {
   MapPin,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import {api}  from "../../../services/api"; // axios instance (withCredentials:true)
+import { api as http, ensureCsrf, me, sanctumPost, readXsrfToken } from "../../lib/apiClient";
 import { useStore } from "../../../store/useStore";
 
 const CATEGORIES = [
@@ -49,7 +49,7 @@ const MAX_IMAGES = 5;
 const MAX_IMAGE_MB = 5;
 
 export default function UploadForm({ onSuccess, onCancel }) {
-  const { user } = useStore(); // expects { id, name, email, phone, ... }
+  const { user, setUser } = useStore(); // expects { id, name, email, phone, ... }
   const fileRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -84,6 +84,20 @@ export default function UploadForm({ onSuccess, onCancel }) {
   useEffect(() => {
     setForm((p) => ({ ...p, contactPhone: user?.phone || p.contactPhone }));
   }, [user?.phone]);
+
+  // Ensure user is populated if session exists
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!user?.id) {
+        try {
+          const u = await me();
+          if (mounted && u) setUser(u);
+        } catch {}
+      }
+    })();
+    return () => { mounted = false; };
+  }, [user?.id, setUser]);
 
   // file handling
   const addFiles = (files) => {
@@ -196,9 +210,12 @@ export default function UploadForm({ onSuccess, onCancel }) {
       form.tags.forEach((t, i) => fd.append(`tags[${i}]`, t));
       form.images.forEach((file) => fd.append("images[]", file));
 
-      const res = await http.post("/thrift/items", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-        withCredentials: true,
+      await ensureCsrf();
+      const res = await http.post("/api/thrift/items/store", fd, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "X-XSRF-TOKEN": readXsrfToken(),
+        },
         onUploadProgress: (ev) => {
           if (!ev.total) return;
           const pct = Math.round((ev.loaded / ev.total) * 100);
@@ -211,19 +228,19 @@ export default function UploadForm({ onSuccess, onCancel }) {
       setProgress(100);
 
       // Attempt auto post (non-blocking)
-      try {
-        const firstUrl = Array.isArray(created.images) && created.images.length
-          ? (typeof created.images[0] === "string" ? created.images[0] : created.images[0]?.url)
-          : null;
-        await http.post("/posts", {
-          caption: `Selling: ${form.name} — $${Number(form.price).toFixed(2)}`,
-          thrift_item_id: created.id ?? created._id,
-          media: firstUrl ? [firstUrl] : [],
-        });
-      } catch (err) {
-        // ignore auto-post errors
-        console.warn("auto-post failed", err?.response?.data ?? err);
-      }
+      // try {
+      //   const firstUrl = Array.isArray(created.images) && created.images.length
+      //     ? (typeof created.images[0] === "string" ? created.images[0] : created.images[0]?.url)
+      //     : null;
+      //   await http.post("/posts", {
+      //     caption: `Selling: ${form.name} — $${Number(form.price).toFixed(2)}`,
+      //     thrift_item_id: created.id ?? created._id,
+      //     media: firstUrl ? [firstUrl] : [],
+      //   });
+      // } catch (err) {
+      //   // ignore auto-post errors
+      //   console.warn("auto-post failed", err?.response?.data ?? err);
+      // }
 
       setIsSubmitting(false);
       setForm({

@@ -15,6 +15,7 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 
 import { api } from "../../services/api";
+import { resolveImageArray } from "../lib/apiClient";
 import { useStore } from "../../store/useStore";
 import SellerProfileCard from "../components/thrift/SellerProfileCard";
 import ThriftCard from "../components/thrift/ThriftCard";
@@ -228,7 +229,14 @@ export default function ThriftItemDetail() {
     );
   }
 
-  const gallery = item.images?.length ? item.images : [];
+  const galleryRaw = item.images?.length ? item.images : [];
+  const gallery = resolveImageArray(
+    Array.isArray(galleryRaw)
+      ? galleryRaw
+      : typeof galleryRaw === "string"
+      ? [galleryRaw]
+      : []
+  );
   const safeIndex = Math.min(currentImageIndex, Math.max(gallery.length - 1, 0));
 
   return (

@@ -9,15 +9,31 @@ const ProductCard = ({ product, index = 0 }) => {
   const { wishlist, toggleWishlist, addToCart } = useStore();
   const isWishlisted = wishlist.includes(product.id);
 
+  // Normalize arrays from backend (can be JSON strings)
+  const normArray = (val) => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : (val ? [val] : []);
+      } catch {
+        return val ? [val] : [];
+      }
+    }
+    return [];
+  };
+
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
 
+    const sizes = normArray(product?.sizes);
+    const colors = normArray(product?.colors);
     addToCart({
       product,
       quantity: 1,
-      size: product.sizes[0],
-      color: product.colors[0]
+      size: sizes[0] || "M",
+      color: colors[0] || "default"
     });
 
     toast.success('Added to cart!');
@@ -43,7 +59,7 @@ const ProductCard = ({ product, index = 0 }) => {
         {/* Image Container */}
         <div className="relative overflow-hidden aspect-square">
           <img
-            src={product.images[0]}
+            src={(normArray(product?.images)[0]) || product.image || ''}
             alt={product.name}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
           />
@@ -93,7 +109,7 @@ const ProductCard = ({ product, index = 0 }) => {
             <div className="flex justify-between items-center text-white text-sm">
               <span>Quick Add</span>
               <div className="flex space-x-1">
-                {product.sizes.slice(0, 4).map((size) => (
+                {normArray(product?.sizes).slice(0, 4).map((size) => (
                   <span key={size} className="px-2 py-1 bg-white/20 rounded text-xs">
                     {size}
                   </span>
@@ -120,11 +136,11 @@ const ProductCard = ({ product, index = 0 }) => {
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-lg font-bold text-gray-900">${product.price}</span>
-              <span className="text-xs text-gray-500">{product.reviews} reviews</span>
+              <span className="text-xs text-gray-500">{product.reviews ?? product.reviewsCount ?? 0} reviews</span>
             </div>
 
             <div className="flex space-x-1">
-              {product.colors.slice(0, 3).map((color, index) => (
+              {normArray(product?.colors).slice(0, 3).map((color, index) => (
                 <div
                   key={index}
                   className="w-4 h-4 rounded-full border-2 border-gray-200"
@@ -140,8 +156,8 @@ const ProductCard = ({ product, index = 0 }) => {
                   }}
                 />
               ))}
-              {product.colors.length > 3 && (
-                <span className="text-xs text-gray-500">+{product.colors.length - 3}</span>
+              {normArray(product?.colors).length > 3 && (
+                <span className="text-xs text-gray-500">+{(normArray(product?.colors).length - 3)}</span>
               )}
             </div>
           </div>

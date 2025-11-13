@@ -24,7 +24,9 @@ const SellerProfileCard = ({ seller = {}, productId, onMessageClick, compact = f
     }
   };
 
-  const startChat = async () => {
+  const startChat = async (e) => {
+    if (e?.stopPropagation) e.stopPropagation(); // prevent card navigation when clicking message
+
     // Allow parent to override behavior if provided
     if (typeof onMessageClick === "function") {
       onMessageClick(seller, productId);
@@ -72,9 +74,25 @@ const SellerProfileCard = ({ seller = {}, productId, onMessageClick, compact = f
     seller?.avatar ||
     "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=100";
 
+  const openSellerProfile = (e) => {
+    if (e?.stopPropagation) e.stopPropagation();
+    const sid = seller?.id;
+    if (sid) navigate(`/seller/${sid}`);
+  };
+
+  // Compact variant (clickable card)
   if (compact) {
     return (
-      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+      <div
+        className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onClick={openSellerProfile}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") openSellerProfile(e);
+        }}
+        aria-label={`Open seller ${seller?.name || "profile"}`}
+      >
         <img src={avatar} alt={seller?.name || "Seller"} className="w-12 h-12 rounded-full object-cover" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-2">
@@ -89,10 +107,12 @@ const SellerProfileCard = ({ seller = {}, productId, onMessageClick, compact = f
             </div>
           ) : null}
         </div>
+
         <button
-          onClick={startChat}
+          onClick={(e) => startChat(e)}
           className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           title="Message seller"
+          aria-label="Message seller"
         >
           <MessageCircle className="h-4 w-4" />
         </button>
@@ -100,11 +120,19 @@ const SellerProfileCard = ({ seller = {}, productId, onMessageClick, compact = f
     );
   }
 
+  // Full variant (clickable card, but actions stop propagation)
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl shadow-lg p-6"
+      className="bg-white rounded-2xl shadow-lg p-6 cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={openSellerProfile}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") openSellerProfile(e);
+      }}
+      aria-label={`Open seller ${seller?.name || "profile"}`}
     >
       {/* Header */}
       <div className="flex items-start space-x-4 mb-4">
@@ -168,16 +196,19 @@ const SellerProfileCard = ({ seller = {}, productId, onMessageClick, compact = f
 
       {/* Actions */}
       <div className="flex space-x-3">
+        {/* View Profile: keeps Link so right-click / open in new tab still works */}
         <Link
           to={`/seller/${seller?.id || ""}`}
+          onClick={(e) => e.stopPropagation()} // stop parent navigation to avoid double navigation loops
           className="flex-1 bg-gray-100 text-gray-900 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-center font-medium"
         >
           View Profile
         </Link>
 
         <button
-          onClick={startChat}
+          onClick={(e) => startChat(e)}
           className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors font-medium flex items-center justify-center space-x-2"
+          aria-label="Message seller"
         >
           <MessageCircle className="h-4 w-4" />
           <span>Message</span>

@@ -10,19 +10,18 @@ import {
   Check,
   ShoppingCart,
   Heart,
+  Filter,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "react-hot-toast";
 
 import ProductCard from "../components/common/ProductCard";
-import FilterSortPanel from "../components/FilterSortPanel";
+// FilterSortPanel intentionally removed for a cleaner header UI
 
 import { useStore } from "../store/useStore";
 import { useAuth } from "../context/AuthContext";
 
-import { SHOP_FILTERS, UNIVERSAL_SORTS } from "../config/filters";
-import { mergeIncomingFilters, productMatchesFilters } from "../utils/filtering";
-
+import { productMatchesFilters } from "../utils/filtering";
 import usePaginated from "../components/hooks/usePaginated";
 
 const Products = () => {
@@ -33,6 +32,9 @@ const Products = () => {
   const {
     products: storeProducts,
     searchQuery,
+    // If your store exposes a setter for global search, include it here.
+    // If not present that's fine — we call it conditionally.
+    setSearchQuery,
     filters,
     setFilters,
     cart: globalCart,
@@ -49,13 +51,29 @@ const Products = () => {
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("name");
 
+  // Local UI-only search input (clean search bar) — stays in sync with global search when possible
+  const [localSearch, setLocalSearchState] = useState(searchQuery || "");
+
+  // Show/hide compact filter panel
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Keep local state and also update global store if setter is available. This preserves existing behaviour
+  // while wiring the search to the store when present (minimal-nature change).
+  const setLocalSearch = (val) => {
+    setLocalSearchState(val);
+    if (typeof setSearchQuery === "function") {
+      try {
+        setSearchQuery(val);
+      } catch (e) {
+        // harmless if store setter behaves differently
+        console.debug("setSearchQuery call failed:", e);
+      }
+    }
+  };
+
   // Mix & Match context from navigation state
-  const {
-    category: mixMatchCategory,
-    targetCategory,
-    fromMixMatch,
-    currentSelection,
-  } = location.state || {};
+  const { category: mixMatchCategory, targetCategory, fromMixMatch, currentSelection } =
+    location.state || {};
 
   const mixMatchCategoryMapping = {
     tops: ["T-Shirts", "Hoodies", "Jackets"],
@@ -63,7 +81,6 @@ const Products = () => {
     footwear: ["Shoes", "Sneakers", "Boots"],
   };
 
-  // Apply Mix & Match category filter on mount if needed
   useEffect(() => {
     if (fromMixMatch && mixMatchCategory) {
       const relevant = mixMatchCategoryMapping[mixMatchCategory] || [];
@@ -72,7 +89,6 @@ const Products = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Simple auth gate
   const ensureAuth = async (nextPath = location.pathname) => {
     if (isLoggedIn) return true;
     toast.error("Please sign in to continue");
@@ -80,16 +96,11 @@ const Products = () => {
     return false;
   };
 
-  // --------- Actions (use global store actions) ----------
-  // Add to cart handler: supports logged-in (store.addToCart) and guest (localStorage guestCart)
   const handleAddToCart = (product, event) => {
     event?.stopPropagation();
-
-    // If user is not logged in -> write to guestCart in localStorage (Cart.jsx already reads guestCart)
     if (!isLoggedIn) {
       try {
         const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
-
         const defaultSize = product.default_size || "M";
         const defaultColor = product.colors?.[0] || product.color || "default";
 
@@ -122,7 +133,6 @@ const Products = () => {
       return;
     }
 
-    // Logged-in: use store action
     if (typeof addToCart === "function") {
       const item = {
         product,
@@ -138,10 +148,8 @@ const Products = () => {
     toast.error("Cart action unavailable");
   };
 
-  // Wishlist handler using toggleWishlist (store expects productId)
   const handleAddToWishlist = (product, event) => {
     event?.stopPropagation();
-
     if (!isLoggedIn) {
       toast.error("Please sign in to continue");
       navigate(`/login?next=${encodeURIComponent(location.pathname)}`, { replace: true });
@@ -188,17 +196,14 @@ const Products = () => {
     },
   });
 
-  // Fallback: if backend isn't ready, allow local store products to be used
   const sourceProducts =
     (fetchedProducts && fetchedProducts.length > 0) ? fetchedProducts : storeProducts || [];
 
-  // Filtering (universal matcher supports gender/occasion/fabric/etc.)
   const filteredProducts = sourceProducts.filter((product) => {
     const matchesSearch =
       (product.name || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
       (product.description || "").toLowerCase().includes((searchQuery || "").toLowerCase());
 
-    // Mix & Match category constraint
     let matchesMixMatchCategory = true;
     if (fromMixMatch && mixMatchCategory) {
       const relevant = mixMatchCategoryMapping[mixMatchCategory] || [];
@@ -206,7 +211,6 @@ const Products = () => {
         relevant.length === 0 || relevant.includes(product.category);
     }
 
-    // productMatchesFilters still used as a client-side guard (fine if backend already filtered)
     return (
       matchesSearch &&
       productMatchesFilters(product, filters) &&
@@ -214,7 +218,6 @@ const Products = () => {
     );
   });
 
-  // Sorting (client-side fallback; server-side sorting can be implemented)
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     switch (sortBy) {
       case "price-low":
@@ -233,12 +236,7 @@ const Products = () => {
     }
   });
 
-  // Panel callbacks
-  const onPanelFilterChange = (incoming) =>
-    setFilters(mergeIncomingFilters(filters, incoming));
-  const onPanelSortChange = (value) => setSortBy(value);
-
-  // Clear filters (keeps original shape + new fields)
+  // Clear filters function still kept for empty state usage
   const clearFilters = () => {
     setFilters({
       category: "",
@@ -246,7 +244,6 @@ const Products = () => {
       sizes: [],
       colors: [],
       rating: 0,
-      // extended fields reset
       gender: undefined,
       occasion: undefined,
       fabric: undefined,
@@ -271,13 +268,27 @@ const Products = () => {
     return displayNames[category] || category;
   };
 
-  // Loading / error helpers for UI
   const totalCount = meta?.total ?? sourceProducts.length;
   const currentPage = meta?.current_page ?? 1;
   const lastPage = meta?.last_page ?? 1;
 
-  // Use cart length from store for notifier (sums quantities)
   const cartCount = (globalCart || []).reduce((total, item) => total + (item.quantity || 0), 0);
+
+  // Search submit handler — now uses global setter when available
+  const onSearchSubmit = (e) => {
+    e.preventDefault();
+    if (typeof setSearchQuery === "function") {
+      setSearchQuery(localSearch);
+    } else {
+      // Fallback: update URL to persist query or keep UI-only behavior
+      navigate({ pathname: location.pathname, search: `?q=${encodeURIComponent(localSearch)}` });
+    }
+  };
+
+  // Small helper: quick local filter changes (keeps shape)
+  const applyQuickFilter = (key, value) => {
+    setFilters({ ...filters, [key]: value });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -295,17 +306,12 @@ const Products = () => {
                   <Palette className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    Mix & Match Selection
-                  </h3>
+                  <h3 className="text-xl font-semibold text-gray-900">Mix & Match Selection</h3>
                   <p className="text-gray-600 mt-1">
-                    Choose a {getCategoryDisplayName(mixMatchCategory)} for your{" "}
-                    {targetCategory} outfit
+                    Choose a {getCategoryDisplayName(mixMatchCategory)} for your {targetCategory} outfit
                   </p>
                   {currentSelection && (
-                    <p className="text-sm text-blue-600 mt-1">
-                      Currently replacing: {currentSelection.name}
-                    </p>
+                    <p className="text-sm text-blue-600 mt-1">Currently replacing: {currentSelection.name}</p>
                   )}
                 </div>
               </div>
@@ -320,12 +326,9 @@ const Products = () => {
 
             <div className="mt-4 flex items-center justify-between bg-white/50 rounded-lg p-3">
               <div className="text-sm text-gray-600">
-                {sortedProducts.length}{" "}
-                {getCategoryDisplayName(mixMatchCategory).toLowerCase()} available
+                {sortedProducts.length} {getCategoryDisplayName(mixMatchCategory).toLowerCase()} available
               </div>
-              <div className="text-sm text-blue-600 font-medium">
-                Click any product to add to your outfit
-              </div>
+              <div className="text-sm text-blue-600 font-medium">Click any product to add to your outfit</div>
             </div>
           </motion.div>
         )}
@@ -346,39 +349,114 @@ const Products = () => {
               </p>
             </div>
 
-            {/* View mode toggles (kept) */}
-            <div className="hidden sm:flex items-center border border-gray-300 rounded-lg overflow-hidden">
+            {/* Clean search bar + view toggles + filter icon */}
+            <div className="flex items-center space-x-4">
+              {/* Search form (clean UI) */}
+              <form onSubmit={onSearchSubmit} className="relative">
+                <input
+                  type="text"
+                  placeholder="Search products, collections..."
+                  value={localSearch}
+                  onChange={(e) => setLocalSearch(e.target.value)}
+                  className="w-72 sm:w-96 px-4 py-2 rounded-full border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+                <button
+                  type="submit"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1.5 rounded-full"
+                  aria-label="Search"
+                >
+                  <Search className="h-4 w-4 text-gray-600" />
+                </button>
+              </form>
+
+              {/* View mode toggles (kept) */}
+              <div className="hidden sm:flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-2 ${
+                    viewMode === "grid"
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`p-2 ${
+                    viewMode === "list"
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* FILTER ICON - toggles compact filter panel */}
               <button
-                onClick={() => setViewMode("grid")}
-                className={`p-2 ${
-                  viewMode === "grid"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
+                onClick={() => setShowFilters((s) => !s)}
+                className="p-2 bg-white border border-gray-300 rounded-full shadow-sm hover:bg-gray-50"
+                aria-label="Open filters"
               >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-2 ${
-                  viewMode === "list"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <List className="h-4 w-4" />
+                <Filter className="h-4 w-4 text-gray-600" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Filters button -> overlay drawer (ALL breakpoints) */}
-        <FilterSortPanel
-          filters={SHOP_FILTERS}
-          sortOptions={[{ value: "name", label: "Sort by Name" }, ...UNIVERSAL_SORTS]}
-          onFilterChange={onPanelFilterChange}
-          onSortChange={onPanelSortChange}
-        />
+        {/* Compact Filter Panel (visible when filter icon toggled) */}
+        {showFilters && (
+          <div className="mb-6 bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Category</label>
+                <select
+                  value={filters?.category || ""}
+                  onChange={(e) => applyQuickFilter("category", e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">All</option>
+                  <option value="T-Shirts">T-Shirts</option>
+                  <option value="Hoodies">Hoodies</option>
+                  <option value="Jackets">Jackets</option>
+                  <option value="Pants">Pants</option>
+                  <option value="Shoes">Shoes</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Max Price</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="5000"
+                  value={(filters?.priceRange?.[1]) ?? 1000}
+                  onChange={(e) => applyQuickFilter("priceRange", [0, parseInt(e.target.value, 10)])}
+                  className="w-48"
+                />
+                <div className="text-sm text-gray-600">{`₹${(filters?.priceRange?.[1]) ?? 1000}`}</div>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    clearFilters();
+                  }}
+                  className="text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  Clear all
+                </button>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-md"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Products */}
         <section className="mt-4">
@@ -401,7 +479,7 @@ const Products = () => {
 
           {/* Loading / Error */}
           {loading && (
-            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-6 grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {[...Array(8)].map((_, i) => (
                 <div key={i} className="bg-white rounded shadow p-6 animate-pulse h-72" />
               ))}
@@ -422,7 +500,7 @@ const Products = () => {
             <div
               className={`grid gap-6 ${
                 viewMode === "grid"
-                  ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                  ? "grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
                   : "grid-cols-1"
               }`}
             >
@@ -455,7 +533,6 @@ const Products = () => {
                     mixMatchText={fromMixMatch ? "Select for Outfit" : undefined}
                   />
 
-                  {/* Auth-gated actions */}
                   {!fromMixMatch && (
                     <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <button
@@ -481,7 +558,6 @@ const Products = () => {
                     </div>
                   )}
 
-                  {/* Mix & Match hover overlay */}
                   {fromMixMatch && (
                     <motion.button
                       whileHover={{ scale: 1.05 }}
@@ -500,7 +576,6 @@ const Products = () => {
             </div>
           )}
 
-          {/* Empty state */}
           {!loading && !error && sortedProducts.length === 0 && (
             <div className="text-center py-12">
               <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -531,7 +606,6 @@ const Products = () => {
             </div>
           )}
 
-          {/* Pagination controls */}
           {!loading && !error && totalCount > 0 && (
             <div className="mt-6 flex items-center justify-between">
               <div className="text-sm text-gray-600">
@@ -557,7 +631,6 @@ const Products = () => {
           )}
         </section>
 
-        {/* Mix & Match quick actions */}
         {fromMixMatch && sortedProducts.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -574,7 +647,6 @@ const Products = () => {
           </motion.div>
         )}
 
-        {/* Cart/Wishlist notifier */}
         {isLoggedIn && (cartCount > 0 || (globalWishlist || []).length > 0) && !fromMixMatch && (
           <motion.div
             initial={{ opacity: 0, x: 300 }}

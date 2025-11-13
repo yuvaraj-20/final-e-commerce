@@ -1,7 +1,9 @@
+// src/pages/Signup.jsx
 import React, { useState } from "react";
 import { signup } from "../lib/apiClient";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
 const themes = {
   user: {
@@ -33,6 +35,8 @@ const themes = {
 export default function Signup() {
   const [role, setRole] = useState("user");
   const t = themes[role];
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [form, setForm] = useState({
     name: "",
@@ -59,8 +63,8 @@ export default function Signup() {
     if (!canSubmit) return;
     setLoading(true);
     setError("");
+
     try {
-      // 🔹 Map frontend role to backend role
       const backendRole = role === "user" ? "customer" : "seller";
 
       await signup({
@@ -70,9 +74,29 @@ export default function Signup() {
         phone: form.phone,
         password: form.password,
       });
-      window.location.href = "/login";
+
+      // ✅ Success toast before redirect
+      toast.success("Account created! Redirecting to login...", {
+        duration: 2000,
+      });
+
+      // ✅ Handle redirect logic
+      const params = new URLSearchParams(location.search);
+      let next = params.get("next");
+
+      if (next && !next.startsWith("/")) {
+        console.warn("Blocked external redirect:", next);
+        next = "/login";
+      }
+
+      setTimeout(() => {
+        navigate(`/login${next ? `?next=${encodeURIComponent(next)}` : ""}`, {
+          replace: true,
+        });
+      }, 1200);
     } catch (err) {
       setError(err?.response?.data?.message || err.message || "Signup failed");
+      toast.error("Signup failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -80,6 +104,7 @@ export default function Signup() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+      {/* Glows */}
       <motion.div
         className={`pointer-events-none absolute -top-28 -left-28 h-96 w-96 rounded-full blur-3xl ${t.glowA}`}
         initial={{ opacity: 0, scale: 0.85 }}
@@ -91,12 +116,6 @@ export default function Signup() {
         initial={{ opacity: 0, scale: 0.85 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.1, delay: 0.1 }}
-      />
-      <motion.div
-        className={`pointer-events-none absolute inset-0 bg-[radial-gradient(50%_50%_at_50%_0%,rgba(255,255,255,0.06)_0%,rgba(2,6,23,0)_70%)]`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1 }}
       />
 
       <div className="relative z-10 grid min-h-screen grid-cols-1 lg:grid-cols-2">
@@ -192,7 +211,9 @@ export default function Signup() {
                 <input
                   type="tel"
                   value={form.phone}
-                  onChange={(e) => update("phone", e.target.value.replace(/[^0-9]/g, ""))}
+                  onChange={(e) =>
+                    update("phone", e.target.value.replace(/[^0-9]/g, ""))
+                  }
                   placeholder="9876543210"
                   className={`w-full rounded-xl border px-3 py-2.5 outline-none transition placeholder:text-slate-400 ${
                     !phoneValid && form.phone
@@ -219,7 +240,7 @@ export default function Signup() {
                       !passValid && form.password
                         ? "border-red-400/40 bg-red-400/10 focus:border-red-400/60"
                         : "border-white/10 bg-white/5 focus:border-white/20"
-                  }`}
+                    }`}
                     required
                     minLength={8}
                   />
@@ -274,12 +295,20 @@ export default function Signup() {
                 }`}
               >
                 <span className="relative z-10">
-                  {loading ? "Creating account…" : `Create ${role === "dealer" ? "Dealer" : "User"} account`}
+                  {loading
+                    ? "Creating account…"
+                    : `Create ${role === "dealer" ? "Dealer" : "User"} account`}
                 </span>
                 <motion.span
                   initial={{ x: "-120%" }}
-                  animate={{ x: canSubmit ? ["-120%", "120%"] : "-120%" }}
-                  transition={{ duration: 1.2, repeat: canSubmit ? Infinity : 0, ease: "easeInOut" }}
+                  animate={{
+                    x: canSubmit ? ["-120%", "120%"] : "-120%",
+                  }}
+                  transition={{
+                    duration: 1.2,
+                    repeat: canSubmit ? Infinity : 0,
+                    ease: "easeInOut",
+                  }}
                   className="absolute inset-y-0 -skew-x-12 bg-white/25"
                   style={{ width: "30%" }}
                 />
@@ -326,7 +355,9 @@ function UserVibe() {
       <div className="relative rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-xl font-semibold">Fresh arrivals</h3>
-          <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs text-emerald-200">Live</span>
+          <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs text-emerald-200">
+            Live
+          </span>
         </div>
         <div className="grid grid-cols-3 gap-3">
           {[...Array(6)].map((_, i) => (
@@ -362,27 +393,20 @@ function DealerVibe() {
           </span>
         </div>
         <div className="space-y-3">
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4"
-          >
-            <div className="text-sm text-slate-300">Today’s Orders</div>
-            <div className="mt-1 text-2xl font-semibold">132</div>
-          </motion.div>
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4"
-          >
-            <div className="text-sm text-slate-300">Conversion Rate</div>
-            <div className="mt-1 text-2xl font-semibold">3.2%</div>
-          </motion.div>
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4"
-          >
-            <div className="text-sm text-slate-300">Top Category</div>
-            <div className="mt-1 text-2xl font-semibold">Streetwear</div>
-          </motion.div>
+          {["Today’s Orders", "Conversion Rate", "Top Category"].map(
+            (label, i) => (
+              <motion.div
+                key={i}
+                whileHover={{ scale: 1.01 }}
+                className="rounded-2xl border border-white/10 bg-white/5 p-4"
+              >
+                <div className="text-sm text-slate-300">{label}</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  {i === 0 ? "132" : i === 1 ? "3.2%" : "Streetwear"}
+                </div>
+              </motion.div>
+            )
+          )}
         </div>
         <p className="mt-5 text-sm text-slate-300">
           Grow your brand with powerful tools and reach our shopper network.

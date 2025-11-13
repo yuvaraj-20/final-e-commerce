@@ -23,14 +23,9 @@ import ProductCard from "../components/common/ProductCard";
 
 /**
  * ProductDetail with improved "You may also like" recommendations.
- *
- * Recommendation strategy (fast & client-side):
- * - category match => +50
- * - shared tags/colors/brand => +10 each
- * - popularity (likes/reviews) => normalized +0..20
- * - boost if in recentlyViewed => +15
- *
- * Persist recently viewed items to localStorage (max 12).
+ * - Carousel is mobile-only; desktop shows a grid.
+ * - Uses ProductCard for consistent visuals.
+ * - Add to cart / wishlist actions preserved.
  */
 
 const Skeleton = () => (
@@ -68,7 +63,7 @@ const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { products, addToCart, wishlist, toggleWishlist } = useStore();
+  const { products, addToCart, wishlist = [], toggleWishlist } = useStore();
   const { isLoggedIn } = useAuth();
 
   // local UI state
@@ -93,7 +88,6 @@ const ProductDetail = () => {
       if (found.sizes?.length) setSelectedSize(found.sizes[0]);
       if (found.colors?.length) setSelectedColor(found.colors[0]);
     }
-    // small delay for skeleton polish
     const t = setTimeout(() => setLoading(false), 180);
     return () => clearTimeout(t);
   }, [id, products]);
@@ -104,17 +98,16 @@ const ProductDetail = () => {
     try {
       const raw = localStorage.getItem(RECENTLY_VIEWED_KEY);
       let arr = raw ? JSON.parse(raw) : [];
-      // remove existing occurrences
       arr = arr.filter((x) => String(x) !== String(product.id));
-      arr.unshift(product.id); // newest at front
+      arr.unshift(product.id);
       if (arr.length > RECENTLY_VIEWED_MAX) arr = arr.slice(0, RECENTLY_VIEWED_MAX);
       localStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(arr));
     } catch (e) {
-      // ignore localstorage errors
+      // ignore
     }
   }, [product]);
 
-  // build a small lookup for popularity normalization
+  // popularity range for scoring
   const popularityRange = useMemo(() => {
     if (!products || products.length === 0) return { min: 0, max: 1 };
     let min = Infinity, max = -Infinity;
@@ -130,48 +123,30 @@ const ProductDetail = () => {
   // Recommendation algorithm
   const getRecommendations = () => {
     if (!product || !products) return [];
-
-    // collect recently viewed IDs
     let recent = [];
     try {
       const raw = localStorage.getItem(RECENTLY_VIEWED_KEY);
       recent = raw ? JSON.parse(raw) : [];
-    } catch (e) {
+    } catch {
       recent = [];
     }
 
     const scoreFor = (cand) => {
       if (!cand || cand.id === product.id) return -Infinity;
       let score = 0;
-
-      // strong: same category
       if (cand.category && product.category && cand.category === product.category) score += 50;
-
-      // medium: brand
       if (cand.brand && product.brand && cand.brand === product.brand) score += 15;
-
-      // medium: shared tags (if you have tags array)
-      const tagsA = cand.tags || [];
-      const tagsB = product.tags || [];
+      const tagsA = cand.tags || [], tagsB = product.tags || [];
       const sharedTags = tagsA.filter((t) => tagsB.includes(t)).length;
       score += sharedTags * 10;
-
-      // medium: shared colors
-      const colorsA = cand.colors || [];
-      const colorsB = product.colors || [];
+      const colorsA = cand.colors || [], colorsB = product.colors || [];
       const sharedColors = colorsA.filter((c) => colorsB.includes(c)).length;
       score += sharedColors * 8;
-
-      // light: popularity normalized
       const pop = (cand.likes ?? 0) + (cand.reviewsCount ?? 0) * 2;
       const { min, max } = popularityRange;
-      const normalized = (pop - min) / (max - min || 1); // 0..1
+      const normalized = (pop - min) / (max - min || 1);
       score += normalized * 20;
-
-      // recently viewed boost
       if (recent.includes(cand.id)) score += 15;
-
-      // small random jitter to vary order on ties
       score += Math.random() * 0.0001;
       return score;
     };
@@ -181,7 +156,6 @@ const ProductDetail = () => {
       .map((p) => ({ p, score: scoreFor(p) }))
       .sort((a, b) => b.score - a.score);
 
-    // return top N (cap 8)
     return scored.slice(0, 8).map((s) => s.p);
   };
 
@@ -196,7 +170,7 @@ const ProductDetail = () => {
     el.scrollBy({ left: offset, behavior: "smooth" });
   };
 
-  // Actions (auth soft-gate)
+  // Auth soft-gate
   const ensureAuth = async (nextPath = `/product/${id}`) => {
     if (isLoggedIn) return true;
     toast.error("Please sign in to continue");
@@ -204,28 +178,100 @@ const ProductDetail = () => {
     return false;
   };
 
-  const handleAddToCart = async () => {
-    if (!product) return;
-    if (!selectedSize && product?.sizes?.length) return toast.error("Please choose a size");
-    if (!selectedColor && product?.colors?.length) return toast.error("Please choose a color");
+  // Add current product to cart
+  const addProductToCart = async () => {
+    if (!product) return false;
+    if (!selectedSize && product?.sizes?.length) {
+      toast.error("Please choose a size");
+      return false;
+    }
+    if (!selectedColor && product?.colors?.length) {
+      toast.error("Please choose a color");
+      return false;
+    }
 
     const ok = await ensureAuth();
-    if (!ok) return;
+    if (!ok) return false;
 
-    addToCart({
-      product,
-      quantity: qty,
-      size: selectedSize,
-      color: selectedColor,
-    });
+    if (typeof addToCart === "function") {
+      addToCart({
+        product,
+        quantity: qty,
+        size: selectedSize,
+        color: selectedColor,
+      });
+    } else {
+      try {
+        const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
+        stored.push({
+          id: `${product.id}-${selectedSize || "M"}-${selectedColor || "default"}-${Date.now()}`,
+          product,
+          size: selectedSize || (product.sizes?.[0] ?? "M"),
+          color: selectedColor || (product.colors?.[0] ?? "default"),
+          quantity: qty,
+        });
+        localStorage.setItem("guestCart", JSON.stringify(stored));
+      } catch (e) {
+        console.error("guestCart write failed", e);
+      }
+    }
+
     toast.success(`${product.name} (${qty}x) added to cart`);
+    return true;
+  };
+
+  const handleAddToCartIcon = async () => { await addProductToCart(); };
+
+  const handleBuyNow = async () => {
+    const ok = await addProductToCart();
+    if (ok) {
+      try { window.location.assign("/checkout"); } catch { window.location.href = "/checkout"; }
+    }
   };
 
   const handleWishlist = async () => {
     const ok = await ensureAuth();
     if (!ok) return;
     toggleWishlist(product.id);
-    toast.success(wishlist.includes(product.id) ? "Removed from wishlist" : "Added to wishlist");
+    toast.success((wishlist || []).includes(product.id) ? "Removed from wishlist" : "Added to wishlist");
+  };
+
+  // Per-recommendation handlers
+  const handleWishlistItem = async (item, e) => {
+    e?.stopPropagation();
+    const ok = await ensureAuth(`/product/${item.id}`);
+    if (!ok) return;
+    toggleWishlist(item.id);
+    toast.success((wishlist || []).includes(item.id) ? "Removed from wishlist" : "Added to wishlist");
+  };
+
+  const handleAddToCartItem = async (item, e) => {
+    e?.stopPropagation();
+    const ok = await ensureAuth(`/product/${item.id}`);
+    if (!ok) return;
+    if (typeof addToCart === "function") {
+      addToCart({
+        product: item,
+        quantity: 1,
+        size: item.default_size || item.sizes?.[0] || "M",
+        color: item.colors?.[0] || item.color || "default",
+      });
+    } else {
+      try {
+        const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
+        stored.push({
+          id: `${item.id}-${item.default_size || "M"}-${item.colors?.[0] || "default"}-${Date.now()}`,
+          product: item,
+          size: item.default_size || item.sizes?.[0] || "M",
+          color: item.colors?.[0] || item.color || "default",
+          quantity: 1,
+        });
+        localStorage.setItem("guestCart", JSON.stringify(stored));
+      } catch (e) {
+        console.error("guestCart write failed", e);
+      }
+    }
+    toast.success(`${item.name} added to cart`);
   };
 
   const share = async () => {
@@ -238,34 +284,26 @@ const ProductDetail = () => {
   };
 
   if (loading) return <Skeleton />;
-
   if (!product) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="text-2xl font-semibold mb-2">Product not found</h1>
         <p className="text-gray-600 mb-6">It may have been moved or is currently unavailable.</p>
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border hover:bg-gray-50"
-        >
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border hover:bg-gray-50">
           <ArrowLeft className="h-4 w-4" /> Go back
         </button>
       </div>
     );
   }
 
-  const isWishlisted = wishlist.includes(product.id);
+  const isWishlisted = (wishlist || []).includes(product.id);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
+          <ArrowLeft className="h-4 w-4" /> Back
         </button>
 
         <div className="flex items-center gap-2">
@@ -317,15 +355,10 @@ const ProductDetail = () => {
           <div className="mt-2 flex items-center gap-3">
             <div className="flex items-center gap-1 text-yellow-500">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Star
-                  key={i}
-                  className={`h-4 w-4 ${i + 1 <= Math.round(product.rating ?? 0) ? "fill-current" : ""}`}
-                />
+                <Star key={i} className={`h-4 w-4 ${i + 1 <= Math.round(product.rating ?? 0) ? "fill-current" : ""}`} />
               ))}
             </div>
-            <span className="text-sm text-gray-600">
-              {Number(product.rating ?? 0).toFixed(1)} · {product.reviewsCount ?? 48} reviews
-            </span>
+            <span className="text-sm text-gray-600">{Number(product.rating ?? 0).toFixed(1)} · {product.reviewsCount ?? 48} reviews</span>
           </div>
 
           <div className="mt-4 flex items-end gap-3">
@@ -393,14 +426,21 @@ const ProductDetail = () => {
             </div>
           </div>
 
-          {/* CTA buttons */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <motion.button whileTap={{ scale: 0.98 }} onClick={handleAddToCart}
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gray-900 text-white hover:bg-black">
-              <ShoppingCart className="h-5 w-5" /> Add to cart
-            </motion.button>
-            <motion.button whileTap={{ scale: 0.98 }} onClick={handleWishlist}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border ${isWishlisted ? "bg-red-50 text-red-600 border-red-200" : "hover:bg-gray-50"}`}>
+          {/* CTA buttons (Buy Now + Cart icon) */}
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+            {/* Left column: Buy Now + cart icon */}
+            <div className="flex items-center gap-3">
+              <motion.button whileTap={{ scale: 0.98 }} onClick={handleBuyNow} className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700">
+                <span className="font-semibold">Buy Now</span>
+              </motion.button>
+
+              <button onClick={handleAddToCartIcon} className="p-3 rounded-lg bg-white border border-gray-100 shadow-sm text-gray-700" aria-label="Add to cart" title="Add to cart">
+                <ShoppingCart className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Right column: wishlist */}
+            <motion.button whileTap={{ scale: 0.98 }} onClick={handleWishlist} className={`inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border ${isWishlisted ? "bg-red-50 text-red-600 border-red-200" : "hover:bg-gray-50"}`}>
               <Heart className="h-5 w-5" /> {isWishlisted ? "Wishlisted" : "Add to wishlist"}
             </motion.button>
           </div>
@@ -416,8 +456,7 @@ const ProductDetail = () => {
           <div className="mt-8">
             <div className="flex items-center gap-6 border-b">
               {["details", "care", "shipping"].map((t) => (
-                <button key={t} onClick={() => setActiveTab(t)}
-                  className={`py-3 -mb-px border-b-2 text-sm font-medium ${activeTab === t ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500"}`}>
+                <button key={t} onClick={() => setActiveTab(t)} className={`py-3 -mb-px border-b-2 text-sm font-medium ${activeTab === t ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500"}`}>
                   {t === "details" ? "Details" : t === "care" ? "Care" : "Shipping"}
                 </button>
               ))}
@@ -451,37 +490,83 @@ const ProductDetail = () => {
         </div>
       </div>
 
-      {/* ===================== You may also like (improved) ===================== */}
+      {/* ===================== You may also like (fixed: mobile carousel + desktop grid) ===================== */}
       {recommendations.length > 0 && (
         <div className="mt-16">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">You may also like</h2>
-            <div className="flex items-center gap-2">
-              <button onClick={() => scrollCarousel("left")} className="p-2 rounded-md border bg-white hover:bg-gray-50" aria-label="Scroll left">
+          <div className="relative">
+            {/* Overlay arrows (kept for visual parity; they work for carousel when visible) */}
+            <div className="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none md:pointer-events-auto z-20">
+              <button onClick={() => scrollCarousel("left")} className="pointer-events-auto p-2 rounded-full border bg-white shadow-md hover:bg-gray-50" aria-label="Scroll left">
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <button onClick={() => scrollCarousel("right")} className="p-2 rounded-md border bg-white hover:bg-gray-50" aria-label="Scroll right">
+            </div>
+
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none md:pointer-events-auto z-20">
+              <button onClick={() => scrollCarousel("right")} className="pointer-events-auto p-2 rounded-full border bg-white shadow-md hover:bg-gray-50" aria-label="Scroll right">
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
+
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">You may also like</h2>
+              <div className="hidden md:block w-12" />
+            </div>
+
+            {/* MOBILE: horizontal carousel only on small screens */}
+            <div ref={carouselRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-2 md:hidden" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
+              {recommendations.map((p, i) => (
+                <div key={p.id} className="snap-center flex-shrink-0 min-w-[160px] sm:min-w-[200px]" onClick={() => navigate(`/product/${p.id}`)}>
+                  <div className="relative group">
+                    <ProductCard product={p} index={i} onClick={() => navigate(`/product/${p.id}`)} />
+
+                    <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <button onClick={(e) => { e.stopPropagation(); handleWishlistItem(p, e); }} className={`p-2 rounded-full shadow-lg transition-all duration-200 ${ (wishlist || []).includes(p.id) ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50" }`} aria-label="Wishlist">
+                        <Heart className="h-4 w-4" fill={(wishlist || []).includes(p.id) ? "currentColor" : "none"} />
+                      </button>
+
+                      <button onClick={(e) => { e.stopPropagation(); handleAddToCartItem(p, e); }} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg transition-all duration-200" aria-label="Add to cart">
+                        <ShoppingCart className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div ref={carouselRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-1" style={{ scrollBehavior: "smooth" }}>
+          {/* DESKTOP: grid (hidden on mobile) */}
+          <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-6">
             {recommendations.map((p, i) => (
-              <div key={p.id} className="min-w-[220px] flex-shrink-0">
+              <div key={`grid-${p.id}`} onClick={() => navigate(`/product/${p.id}`)} className="relative group">
                 <ProductCard product={p} index={i} onClick={() => navigate(`/product/${p.id}`)} />
+
+                <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <button onClick={(e) => { e.stopPropagation(); handleWishlistItem(p, e); }} className={`p-2 rounded-full shadow-lg transition-all duration-200 ${ (wishlist || []).includes(p.id) ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50" }`}>
+                    <Heart className="h-4 w-4" fill={(wishlist || []).includes(p.id) ? "currentColor" : "none"} />
+                  </button>
+
+                  <button onClick={(e) => { e.stopPropagation(); handleAddToCartItem(p, e); }} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg transition-all duration-200">
+                    <ShoppingCart className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Sticky mobile CTA */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 flex gap-3">
-        <button onClick={handleWishlist} className={`flex-1 px-4 py-3 rounded-lg border ${isWishlisted ? "bg-red-50 text-red-600 border-red-200" : "hover:bg-gray-50"}`}>
+      {/* Sticky mobile CTA (Buy Now + small cart icon + wishlist) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 flex gap-3 items-center">
+        <button onClick={handleWishlist} className={`px-4 py-3 rounded-lg border ${isWishlisted ? "bg-red-50 text-red-600 border-red-200" : "hover:bg-gray-50"}`}>
           <span className="font-medium">{isWishlisted ? "Wishlisted" : "Wishlist"}</span>
         </button>
-        <button onClick={handleAddToCart} className="flex-1 px-4 py-3 rounded-lg bg-gray-900 text-white font-medium">Add to cart</button>
+
+        <div className="flex-1 flex gap-2">
+          <button onClick={handleBuyNow} className="flex-1 px-4 py-3 rounded-lg bg-green-600 text-white font-medium">Buy Now</button>
+          <button onClick={handleAddToCartIcon} className="px-3 py-3 rounded-lg bg-white border border-gray-100 shadow-sm text-gray-700">
+            <ShoppingCart className="h-5 w-5" />
+          </button>
+        </div>
       </div>
     </div>
   );

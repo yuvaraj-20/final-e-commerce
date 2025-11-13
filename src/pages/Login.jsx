@@ -28,7 +28,7 @@ export default function Login() {
   const location = useLocation();
   const { setUser, markLoggedIn } = useAuth(); // from AuthContext
 
-  const [role, setRole] = useState("user"); // UI role: "user" | "dealer"
+  const [role, setRole] = useState("user"); // "user" | "dealer"
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -58,12 +58,24 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(u));
       markLoggedIn?.(true);
 
-      toast.success("Signed in");
+      // ✅ Success toast (uses user's name if available)
+      const name = u?.name || u?.firstName || u?.username || "there";
+      toast.success(`Welcome back, ${name}! Redirecting...`);
 
       // 3) Redirect to ?next=... if present, else home
       const params = new URLSearchParams(location.search);
-      const next = params.get("next");
-      navigate(next || "/home", { replace: true });
+      let next = params.get("next");
+
+      // 🧠 Security & cleanup: only allow internal redirects
+      if (next && !next.startsWith("/")) {
+        console.warn("Blocked external redirect:", next);
+        next = "/home";
+      }
+
+      // small delay so user sees the toast
+      setTimeout(() => {
+        navigate(next || "/home", { replace: true });
+      }, 700);
     } catch (err) {
       const msg = err?.response?.data?.message || err.message || "Login failed";
       setError(msg);
@@ -127,7 +139,7 @@ export default function Login() {
                   disabled={loading}
                   className={`rounded-xl px-3 py-2 text-sm transition ${
                     role === r
-                      ? `bg-gradient-to-r ${themes[r].gradient} text-slate-9 00`
+                      ? `bg-gradient-to-r ${themes[r].gradient} text-slate-900`
                       : "bg-white/5 text-slate-300 hover:bg-white/10"
                   }`}
                   aria-pressed={role === r}

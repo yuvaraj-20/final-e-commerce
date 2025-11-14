@@ -530,12 +530,13 @@ const ThriftStore = () => {
               <TrendingUp className="h-6 w-6 text-purple-600" />
               <h2 className="text-2xl font-bold text-gray-900">Trending Now</h2>
             </div>
+            
 
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6">
-              {thriftItems
-                .filter((item) => item.isBoosted)
-                .slice(0, 4)
-                .map((item, index) => (
+              {(() => {
+                const boosted = thriftItems.filter((it) => it.isBoosted);
+                const pool = boosted.length > 0 ? boosted : [...thriftItems].sort(() => Math.random() - 0.5);
+                return pool.slice(0, 4).map((item, index) => (
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, y: 12 }}
@@ -559,10 +560,7 @@ const ThriftStore = () => {
                       <p className="text-sm text-gray-500">${item.price}</p>
 
                       <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/seller/${item.sellerId}`);
-                        }}
+                        onClick={() => item.sellerId && navigate(`/seller/${item.sellerId}`)}
                         className="mt-3 flex items-center gap-2 cursor-pointer group"
                       >
                         <img

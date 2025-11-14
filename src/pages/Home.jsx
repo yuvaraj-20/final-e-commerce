@@ -14,19 +14,14 @@ import {
   Sparkles,
   Glasses,
 } from "lucide-react";
-import { motion } from 'framer-motion';
-import { toast } from 'react-hot-toast';
 import ProductCard from '../components/common/ProductCard';
 import HeroCarousel from '../components/home/HeroCarousel';
 import { useStore } from '../store/useStore';
-import { useAuth } from '../context/AuthContext'; // Add authentication
 import { api as http } from '../lib/apiClient';
 import NewArrivalsCarousel from '../components/home/NewArrivalsCarousel';  
 import { motion } from "framer-motion";
 import { toast } from "react-hot-toast";
-import { useStore } from "../store/useStore";
 import { useAuth } from "../context/AuthContext";
-import { api } from "../services/api";
 
 /**
  * Responsive luxury landing (Thrift / MonoFit / Customize)

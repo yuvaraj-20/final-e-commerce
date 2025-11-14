@@ -1,6 +1,6 @@
 // src/pages/Login.jsx
 import React, { useState } from "react";
-import { login, me } from "../lib/apiClient";
+import { login, me, API_BASE_URL } from "../lib/apiClient";
 import { motion } from "framer-motion";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -224,6 +224,30 @@ export default function Login() {
                   style={{ width: "30%" }}
                 />
               </motion.button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = location.pathname;
+                  window.location.href = `${API_BASE_URL}/auth/google/redirect?role=customer&next=${next}`;
+                }}
+                className="mt-3 w-full rounded-2xl border border-slate-300/60 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50 flex items-center justify-center gap-3"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-sm bg-white">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 48 48"
+                    className="h-4 w-4"
+                  >
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.5 24.5c0-1.57-.14-3.08-.39-4.5H24v9h12.7c-.55 2.88-2.2 5.33-4.7 6.98l7.61 5.9C43.89 37.52 46.5 31.5 46.5 24.5z"/>
+                    <path fill="#FBBC05" d="M10.54 28.59A14.47 14.47 0 0 1 9.5 24c0-1.59.28-3.12.79-4.54l-7.98-6.19C.79 15.84 0 19.32 0 23c0 3.63.77 7.06 2.15 10.16l8.39-4.57z"/>
+                    <path fill="#34A853" d="M24 47c6.48 0 11.93-2.13 15.9-5.79l-7.61-5.9C30.26 36.39 27.36 37.5 24 37.5c-6.27 0-11.58-3.52-13.98-8.73l-8.39 4.57C6.51 42.62 14.62 47 24 47z"/>
+                    <path fill="none" d="M0 0h48v48H0z"/>
+                  </svg>
+                </span>
+                <span>Continue with Google</span>
+              </button>
 
               <div className="pt-2 text-center text-sm text-slate-300">
                 New here?{" "}

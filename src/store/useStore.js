@@ -1,6 +1,11 @@
 // src/store/useStore.js
 import { create } from "zustand";
-import { get, post, del } from "../lib/apiClient"; // uses your existing apiClient.js
+import {
+  api,
+  get,
+  ensureCsrf,
+  readXsrfToken,
+} from "../lib/apiClient"; // uses your existing apiClient.js
 
 // Default filter configurations
 const defaultThriftFilters = {
@@ -151,14 +156,21 @@ export const useStore = create((set, get) => ({
       // payload may be cart object with items relationship
       let items = [];
       if (payload?.items && Array.isArray(payload.items)) {
-        items = payload.items.map((i) => ({
-          id: i.id,
-          product: i.product ?? i.product_data ?? {},
-          quantity: i.quantity ?? 1,
-          store: i.store ?? payload.store ?? undefined,
-          size: i.size ?? undefined,
-          color: i.color ?? undefined,
-        }));
+        items = payload.items.map((i) => {
+          const p = i.product ?? i.product_data ?? {};
+          return {
+            id: i.id,
+            product: p,
+            quantity: i.quantity ?? 1,
+            store: i.store ?? payload.store ?? undefined,
+            size: i.size ?? undefined,
+            color: i.color ?? undefined,
+            // flattened fields for header mini-cart
+            name: p.name,
+            price: p.price ?? i.price_at_add,
+            image: p.image || (Array.isArray(p.images) ? p.images[0] : undefined),
+          };
+        });
       } else if (Array.isArray(payload)) {
         // backend returned items array directly
         items = payload;
@@ -177,19 +189,31 @@ export const useStore = create((set, get) => ({
   // Add to cart on server (expects product_id, quantity, optional store)
   addToCartServer: async ({ product_id, quantity = 1, store = null }) => {
     try {
-      const res = await post("/api/cart/add", { product_id, quantity, store });
+      await ensureCsrf();
+      const xsrf = readXsrfToken();
+      const res = await api.post(
+        "/api/cart/add",
+        { product_id, quantity, store },
+        { headers: { "X-XSRF-TOKEN": xsrf } }
+      );
       const payload = res?.data ?? res;
       // After add, backend usually returns updated cart model -> normalise items
       let items = [];
       if (payload?.items && Array.isArray(payload.items)) {
-        items = payload.items.map((i) => ({
-          id: i.id,
-          product: i.product ?? {},
-          quantity: i.quantity ?? 1,
-          store: i.store ?? undefined,
-          size: i.size ?? undefined,
-          color: i.color ?? undefined,
-        }));
+        items = payload.items.map((i) => {
+          const p = i.product ?? i.product_data ?? {};
+          return {
+            id: i.id,
+            product: p,
+            quantity: i.quantity ?? 1,
+            store: i.store ?? undefined,
+            size: i.size ?? undefined,
+            color: i.color ?? undefined,
+            name: p.name,
+            price: p.price ?? i.price_at_add,
+            image: p.image || (Array.isArray(p.images) ? p.images[0] : undefined),
+          };
+        });
       } else if (Array.isArray(payload)) {
         items = payload;
       }
@@ -204,18 +228,28 @@ export const useStore = create((set, get) => ({
   // Remove a cart item on server by cart_item id
   removeCartItemServer: async (cartItemId) => {
     try {
-      const res = await del(`/api/cart/item/${cartItemId}`);
+      await ensureCsrf();
+      const xsrf = readXsrfToken();
+      const res = await api.delete(`/api/cart/item/${cartItemId}`, {
+        headers: { "X-XSRF-TOKEN": xsrf },
+      });
       const payload = res?.data ?? res;
       let items = [];
-      if (payload?.data?.items && Array.isArray(payload.data.items)) {
-        items = payload.data.items.map((i) => ({
-          id: i.id,
-          product: i.product ?? {},
-          quantity: i.quantity ?? 1,
-          store: i.store ?? undefined,
-          size: i.size ?? undefined,
-          color: i.color ?? undefined,
-        }));
+      if (payload?.items && Array.isArray(payload.items)) {
+        items = payload.items.map((i) => {
+          const p = i.product ?? i.product_data ?? {};
+          return {
+            id: i.id,
+            product: p,
+            quantity: i.quantity ?? 1,
+            store: i.store ?? undefined,
+            size: i.size ?? undefined,
+            color: i.color ?? undefined,
+            name: p.name,
+            price: p.price ?? i.price_at_add,
+            image: p.image || (Array.isArray(p.images) ? p.images[0] : undefined),
+          };
+        });
       } else if (Array.isArray(payload)) {
         items = payload;
       } else if (payload?.data && Array.isArray(payload.data)) {
@@ -232,7 +266,11 @@ export const useStore = create((set, get) => ({
   // Clear cart server-side
   clearCartServer: async () => {
     try {
-      await del("/api/cart/clear");
+      await ensureCsrf();
+      const xsrf = readXsrfToken();
+      await api.delete("/api/cart/clear", {
+        headers: { "X-XSRF-TOKEN": xsrf },
+      });
       set({ cart: [] });
       return [];
     } catch (err) {

@@ -13,7 +13,16 @@ import RecommendedItems from "../components/cart/RecommendedItems";
 
 const Cart = () => {
   const navigate = useNavigate();
-  const { cart, setCart, loadGuestCart } = useStore();
+  const {
+    cart,
+    setCart,
+    loadGuestCart,
+    clearGuestCart,
+    fetchCartFromServer,
+    removeCartItemServer,
+    clearCartServer,
+    syncGuestCartToServer,
+  } = useStore();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -25,37 +34,32 @@ const Cart = () => {
       setLoading(true);
       try {
         const user = await me();
-        setIsLoggedIn(!!user?.id);
+        const loggedIn = !!user?.id;
+        setIsLoggedIn(loggedIn);
 
         const guestCart = loadGuestCart();
-        if (Array.isArray(guestCart) && guestCart.length > 0) {
-          toast("Merging your guest cart...");
-          await Promise.all(
-            guestCart.map((item) =>
-              api.post("/api/cart/items", {
-                product_id: item.product?.id ?? item.id,
-                quantity: item.quantity ?? 1,
-              })
-            )
-          );
-          localStorage.removeItem("guestCart");
+
+        if (loggedIn) {
+          if (Array.isArray(guestCart) && guestCart.length > 0) {
+            toast("Merging your guest cart...");
+            try {
+              await syncGuestCartToServer(guestCart);
+              clearGuestCart();
+            } catch (err) {
+              console.warn("Guest cart sync failed, falling back to server cart only", err);
+            }
+          }
+
+          try {
+            const items = await fetchCartFromServer();
+            setCart(Array.isArray(items) ? items : []);
+          } catch (err) {
+            console.warn("Failed to load server cart, using guest cart", err);
+            setCart(Array.isArray(guestCart) ? guestCart : []);
+          }
+        } else {
+          setCart(Array.isArray(guestCart) ? guestCart : []);
         }
-
-        const resp = await api.get("/api/cart");
-        const payload = resp?.data ?? resp;
-
-        let normalized = [];
-        if (Array.isArray(payload)) normalized = payload;
-        else if (payload?.items) normalized = payload.items;
-        else if (payload?.cart?.items) normalized = payload.cart.items;
-        else if (payload?.data) normalized = payload.data;
-        else {
-          console.warn("Unexpected /api/cart shape:", payload);
-          normalized =
-            Object.values(payload || {}).find((v) => Array.isArray(v)) ?? [];
-        }
-
-        setCart(Array.isArray(normalized) ? normalized : []);
       } catch (err) {
         console.warn("Failed to load server cart, using guest cart", err);
         const guestCart = loadGuestCart();
@@ -72,18 +76,7 @@ const Cart = () => {
   const handleRemove = async (id) => {
     try {
       if (isLoggedIn) {
-        try {
-          await api.delete(`/api/cart/items/${id}`);
-        } catch {
-          await api.delete(`/api/cart/items`, { params: { product_id: id } });
-        }
-
-        const resp = await api.get("/api/cart");
-        const payload = resp?.data ?? resp;
-        const items =
-          payload?.items ??
-          payload?.cart?.items ??
-          (Array.isArray(payload) ? payload : []);
+        const items = await removeCartItemServer(id);
         setCart(Array.isArray(items) ? items : []);
       } else {
         const updated = cart.filter(
@@ -109,7 +102,7 @@ const Cart = () => {
 
     if (isLoggedIn) {
       try {
-        await api.patch(`/api/cart/items/${id}`, { quantity: newQty });
+        await api.put(`/api/cart/item/${id}`, { quantity: newQty });
       } catch (err) {
         console.warn("Server quantity update failed:", err);
       }
@@ -173,7 +166,7 @@ const Cart = () => {
     );
   }
 
-  // ✅ Main Render
+
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-6">
       <div className="max-w-6xl mx-auto">

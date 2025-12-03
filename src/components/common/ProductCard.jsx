@@ -1,12 +1,14 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Zap } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
+import { me } from '../../lib/apiClient'
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 const ProductCard = ({ product, index = 0 }) => {
-  const { wishlist, toggleWishlist, addToCart } = useStore();
+  const navigate = useNavigate();
+  const { wishlist, toggleWishlist, addToCart, addToCartServer } = useStore();
   const isWishlisted = wishlist.includes(product.id);
 
   // Normalize arrays from backend (can be JSON strings)
@@ -23,17 +25,39 @@ const ProductCard = ({ product, index = 0 }) => {
     return [];
   };
 
-  const handleAddToCart = (e) => {
+  const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     const sizes = normArray(product?.sizes);
     const colors = normArray(product?.colors);
+
+    // Try server-backed cart for logged-in users
+    try {
+      const user = await me();
+      if (user && typeof addToCartServer === 'function') {
+        await addToCartServer({
+          product_id: product.id,
+          quantity: 1,
+          store: 'monofit',
+        });
+        toast.success('Added to cart!');
+        return;
+      }
+    } catch (err) {
+      // If not authenticated, gently redirect via login page with next
+      if (err?.response?.status === 401) {
+        navigate(`/login?next=${encodeURIComponent('/products')}`);
+      }
+      // fall through to local cart
+    }
+
+    // Fallback: local cart (guest or if server add fails)
     addToCart({
       product,
       quantity: 1,
-      size: sizes[0] || "M",
-      color: colors[0] || "default"
+      size: sizes[0] || 'M',
+      color: colors[0] || 'default',
     });
 
     toast.success('Added to cart!');

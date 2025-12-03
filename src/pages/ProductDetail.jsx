@@ -64,7 +64,7 @@ const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { products, addToCart, wishlist = [], toggleWishlist } = useStore();
+  const { products, addToCart, addToCartServer, wishlist = [], toggleWishlist } = useStore();
   const { isLoggedIn } = useAuth();
 
   // local UI state
@@ -233,9 +233,22 @@ const ProductDetail = () => {
       return false;
     }
 
-    const ok = await ensureAuth();
-    if (!ok) return false;
+    // If logged in, prefer server-backed cart
+    if (isLoggedIn && typeof addToCartServer === "function") {
+      try {
+        await addToCartServer({
+          product_id: product.id,
+          quantity: qty,
+          store: "monofit",
+        });
+        toast.success(`${product.name} (${qty}x) added to cart`);
+        return true;
+      } catch (err) {
+        console.warn("addToCartServer failed, falling back to local cart", err);
+      }
+    }
 
+    // Fallback: local cart (guest or if server add fails)
     if (typeof addToCart === "function") {
       addToCart({
         product,
@@ -292,6 +305,23 @@ const ProductDetail = () => {
     e?.stopPropagation();
     const ok = await ensureAuth(`/product/${item.id}`);
     if (!ok) return;
+
+    // If logged in, prefer server-backed cart
+    if (isLoggedIn && typeof addToCartServer === "function") {
+      try {
+        await addToCartServer({
+          product_id: item.id,
+          quantity: 1,
+          store: "monofit",
+        });
+        toast.success(`${item.name} added to cart`);
+        return;
+      } catch (err) {
+        console.warn("addToCartServer (recommendation) failed, falling back to local cart", err);
+      }
+    }
+
+    // Fallback: local cart (guest or server failure)
     if (typeof addToCart === "function") {
       addToCart({
         product: item,

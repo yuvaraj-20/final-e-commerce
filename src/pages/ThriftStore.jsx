@@ -32,6 +32,7 @@ const ThriftStore = () => {
     setThriftFilters,
     resetThriftFilters,
     addToCart,
+    addToCartServer,
     setUser,
   } = useStore();
 
@@ -212,35 +213,31 @@ const ThriftStore = () => {
 
   // Unified Add to Cart
   const handleAddToCart = async (item) => {
-    let isUserLoggedIn = false;
-
-    try {
-      await me();
-      isUserLoggedIn = true;
-    } catch {
-      isUserLoggedIn = false;
-    }
-
     const productPayload = {
       product: item,
       size: item.default_size || "M",
       color: item.colors?.[0] || item.color || "default",
       quantity: 1,
-      store: "Thrift",
+      store: "thrift",
     };
 
-    if (isUserLoggedIn) {
-      try {
-        addToCart(productPayload);
+    // Logged-in path: use server-backed cart
+    try {
+      const user = await me();
+      if (user && typeof addToCartServer === "function") {
+        await addToCartServer({
+          product_id: item.id,
+          quantity: 1,
+          store: "thrift",
+        });
         toast.success(`${item.title} added to your cart`);
-      } catch (err) {
-        console.error("Cart update failed:", err);
-        toast.error("Could not add to cart");
+        return;
       }
-      return;
+    } catch (err) {
+      // if unauthenticated, fall through to guest cart
     }
 
-    // Guest fallback
+    // Guest fallback (localStorage + Zustand)
     try {
       const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
       const existing = stored.find(

@@ -1,220 +1,253 @@
-import React, { useState, useEffect } from 'react';
-import { Package, Truck, CheckCircle, Clock, Eye, Download } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { api } from '../../../services/api';
-import { useStore } from '../../../store/useStore';
+// src/components/dashboard/user/UserMyOrders.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { Package, Truck, CheckCircle, Clock, XCircle, Eye } from "lucide-react";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+
+import { api } from "../../../services/api";
+import { useStore } from "../../../store/useStore";
+
+const statusOptions = [
+  { id: "all", label: "All Orders" },
+  { id: "processing", label: "Processing" },
+  { id: "shipped", label: "Shipped" },
+  { id: "delivered", label: "Delivered" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
+const statusStyles = {
+  processing: "bg-amber-50 text-amber-700 border border-amber-100",
+  shipped: "bg-blue-50 text-blue-700 border border-blue-100",
+  delivered: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+  cancelled: "bg-rose-50 text-rose-700 border border-rose-100",
+};
+
+const statusIcon = (status) => {
+  switch (status) {
+    case "processing":
+      return <Clock className="h-4 w-4" />;
+    case "shipped":
+      return <Truck className="h-4 w-4" />;
+    case "delivered":
+      return <CheckCircle className="h-4 w-4" />;
+    case "cancelled":
+      return <XCircle className="h-4 w-4" />;
+    default:
+      return <Package className="h-4 w-4" />;
+  }
+};
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatPrice = (value) => {
+  if (value == null) return "—";
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(Number(value));
+  } catch {
+    return `₹${value}`;
+  }
+};
 
 const UserMyOrders = () => {
   const { user, orders, setOrders } = useStore();
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState("all");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
-      loadOrders();
-    }
-  }, [user]);
-
-  const loadOrders = async () => {
     if (!user) return;
-    
-    setIsLoading(true);
-    try {
-      const data = await api.getOrders(user.id);
-      setOrders(data);
-    } catch (error) {
-      console.error('Failed to load orders:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const loadOrders = async () => {
+      setIsLoading(true);
+      try {
+        const data = await api.getOrders(user.id);
+        setOrders(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load orders:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadOrders();
+  }, [user, setOrders]);
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="h-5 w-5 text-yellow-500" />;
-      case 'processing':
-        return <Package className="h-5 w-5 text-blue-500" />;
-      case 'shipped':
-        return <Truck className="h-5 w-5 text-purple-500" />;
-      case 'delivered':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
-    }
-  };
+  const filteredOrders = useMemo(() => {
+    if (!Array.isArray(orders)) return [];
+    if (selectedStatus === "all") return orders;
+    return orders.filter(
+      (o) => (o.status || "").toLowerCase() === selectedStatus.toLowerCase()
+    );
+  }, [orders, selectedStatus]);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'processing':
-        return 'bg-blue-100 text-blue-800';
-      case 'shipped':
-        return 'bg-purple-100 text-purple-800';
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  // ---------- UI helpers ----------
 
-  const filteredOrders = orders.filter(order => 
-    selectedStatus === 'all' || order.status === selectedStatus
+  const renderEmpty = () => (
+    <div className="flex flex-col items-center justify-center pt-16 pb-24">
+      <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+        <Package className="h-8 w-8 text-gray-400" />
+      </div>
+      <h2 className="text-base md:text-lg font-semibold text-gray-900">
+        No orders found
+      </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        You haven&apos;t placed any orders yet.
+      </p>
+      <button
+        onClick={() => navigate("/products")}
+        className="mt-6 px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-medium shadow-md hover:shadow-lg hover:opacity-95 transition"
+      >
+        Start Shopping
+      </button>
+    </div>
   );
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        {[...Array(3)].map((_, index) => (
-          <div key={index} className="bg-white rounded-xl shadow-sm p-6 animate-pulse">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-32 h-4 bg-gray-200 rounded"></div>
-              <div className="w-20 h-6 bg-gray-200 rounded-full"></div>
-            </div>
-            <div className="space-y-3">
-              <div className="w-3/4 h-4 bg-gray-200 rounded"></div>
-              <div className="w-1/2 h-4 bg-gray-200 rounded"></div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">My Orders</h2>
-          <p className="text-gray-600">Track and manage your fashion orders</p>
-        </div>
-        
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+  const renderSkeleton = () => (
+    <div className="mt-6 space-y-3">
+      {Array.from({ length: 3 }).map((_, idx) => (
+        <div
+          key={idx}
+          className="animate-pulse rounded-xl border border-gray-100 bg-white px-4 py-4"
         >
-          <option value="all">All Orders</option>
-          <option value="pending">Pending</option>
-          <option value="processing">Processing</option>
-          <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
-        </select>
-      </div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="h-4 w-32 bg-gray-100 rounded" />
+            <div className="h-4 w-16 bg-gray-100 rounded" />
+          </div>
+          <div className="h-3 w-48 bg-gray-100 rounded mb-2" />
+          <div className="h-3 w-40 bg-gray-100 rounded" />
+        </div>
+      ))}
+    </div>
+  );
 
-      {/* Orders List */}
-      <div className="space-y-4">
-        {filteredOrders.map((order, index) => (
+  const renderOrders = () => (
+    <div className="mt-6 space-y-4">
+      {filteredOrders.map((order, idx) => {
+        const status = (order.status || "processing").toLowerCase();
+        const items = order.items || order.order_items || [];
+        const firstItem = items[0];
+        const itemCount = items.length;
+
+        return (
           <motion.div
-            key={order.id}
-            initial={{ opacity: 0, y: 20 }}
+            key={order.id || idx}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-            className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow"
+            transition={{ duration: 0.2, delay: idx * 0.03 }}
+            className="rounded-xl border border-gray-100 bg-white px-4 py-4 sm:px-5 sm:py-5 shadow-sm hover:shadow-md transition-shadow"
           >
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-              <div className="flex-1">
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(order.status)}
-                    <span className="font-semibold text-gray-900">Order #{order.id}</span>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Order
+                  </span>
+                  <span className="text-sm font-mono text-gray-900">
+                    #{order.id ?? order.order_number ?? "—"}
                   </span>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Order Date</p>
-                    <p className="font-medium text-gray-900">
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Amount</p>
-                    <p className="font-medium text-gray-900">${order.totalAmount.toFixed(2)}</p>
-                  </div>
-                  {order.trackingNumber && (
-                    <div>
-                      <p className="text-sm text-gray-600">Tracking Number</p>
-                      <p className="font-medium text-gray-900">{order.trackingNumber}</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-sm text-gray-600">Items</p>
-                    <p className="font-medium text-gray-900">
-                      {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
-                    </p>
-                  </div>
-                </div>
-
-                {/* Order Items */}
-                <div className="space-y-3">
-                  {order.items.map((item, itemIndex) => (
-                    <div key={itemIndex} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                      <img
-                        src={item.product.images[0]}
-                        alt={item.product.name}
-                        className="w-16 h-16 object-cover rounded-lg"
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">{item.product.name}</h4>
-                        <p className="text-sm text-gray-600">
-                          Size: {item.size} • Color: {item.color} • Qty: {item.quantity}
-                        </p>
-                        <p className="text-sm font-medium text-gray-900">
-                          ${(item.product.price * item.quantity).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-sm text-gray-600">
+                  Placed on{" "}
+                  <span className="font-medium">
+                    {formatDate(order.created_at || order.date)}
+                  </span>
+                </p>
+                {firstItem && (
+                  <p className="text-sm text-gray-700 line-clamp-1">
+                    {firstItem.name || firstItem.product_name || "Fashion item"}
+                    {itemCount > 1 && (
+                      <span className="text-gray-500">
+                        {" "}
+                        + {itemCount - 1} more item
+                        {itemCount - 1 > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
 
-              {/* Actions */}
-              <div className="flex flex-col space-y-2 lg:ml-6">
-                <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2">
+              <div className="flex flex-col items-start sm:items-end gap-2">
+                <div
+                  className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    statusStyles[status] ||
+                    "bg-gray-50 text-gray-700 border border-gray-100"
+                  }`}
+                >
+                  {statusIcon(status)}
+                  <span className="capitalize">{status}</span>
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  Total{" "}
+                  <span className="font-semibold text-gray-900">
+                    {formatPrice(order.total || order.total_amount)}
+                  </span>
+                </p>
+
+                <button
+                  onClick={() =>
+                    navigate(`/order/${order.id ?? order.order_number}`)
+                  }
+                  className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                >
                   <Eye className="h-4 w-4" />
-                  <span>View Details</span>
+                  View details
                 </button>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-                  <Download className="h-4 w-4" />
-                  <span>Download Invoice</span>
-                </button>
-                {order.status === 'delivered' && (
-                  <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                    Reorder
-                  </button>
-                )}
               </div>
             </div>
           </motion.div>
-        ))}
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <section className="w-full px-6 md:px-10 pt-6 pb-10">
+      {/* Top row: title + filter (full-width like your design) */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-sm md:text-base font-semibold text-gray-900">
+            My Orders
+          </h2>
+          <p className="text-xs md:text-sm text-gray-600">
+            Track and manage your fashion orders.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="hidden md:inline text-xs text-gray-500">Filter</span>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="text-xs md:text-sm border border-gray-200 rounded-full px-3 py-1.5 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Empty State */}
-      {filteredOrders.length === 0 && (
-        <div className="text-center py-12">
-          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Package className="h-12 w-12 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
-          <p className="text-gray-600 mb-4">
-            {selectedStatus === 'all' 
-              ? "You haven't placed any orders yet" 
-              : `No ${selectedStatus} orders found`}
-          </p>
-          <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors">
-            Start Shopping
-          </button>
-        </div>
-      )}
-    </div>
+      {/* Main content: empty / skeleton / list */}
+      {isLoading
+        ? renderSkeleton()
+        : filteredOrders.length === 0
+        ? renderEmpty()
+        : renderOrders()}
+    </section>
   );
 };
 

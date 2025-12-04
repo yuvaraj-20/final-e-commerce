@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useAuth } from "../context/AuthContext"; // <-- make sure this exists
+import { useStore } from "../store/useStore"; // ADDED: sync user into Zustand store
 
 const themes = {
   user: {
@@ -27,6 +28,9 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setUser, markLoggedIn } = useAuth(); // from AuthContext
+
+  // Zustand setter to sync user across the dashboard UI
+  const { setUser: setStoreUser } = useStore(); // ADDED
 
   const [role, setRole] = useState("user"); // "user" | "dealer"
   const [identifier, setIdentifier] = useState("");
@@ -52,10 +56,19 @@ export default function Login() {
       // 1) Login (CSRF + cookies handled in apiClient)
       await login({ role: backendRole, identifier, password });
 
-      // 2) Warm the session and store user in context + localStorage
+      // 2) Warm the session and store user in context + Zustand store + localStorage
       const u = await me();
+
+      // Save to AuthContext (existing)
       setUser(u);
+
+      // Save to global Zustand store (Dashboard/Sidebar/Settings read from useStore)
+      setStoreUser(u);
+
+      // Persist if your AuthContext relies on localStorage
       localStorage.setItem("user", JSON.stringify(u));
+
+      // Mark logged in state if your context uses it
       markLoggedIn?.(true);
 
       // ✅ Success toast (uses user's name if available)

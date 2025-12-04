@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -38,6 +39,10 @@ import ThriftSell from "./pages/ThriftSell";
 import Chat from "./pages/Chat";
 import TrustSafety from "./pages/TrustSafety";
 
+//
+import UserDashboard from "./components/dashboard/user/UserDashboard";
+
+
 import { useStore } from "./store/useStore";
 import { me } from "./lib/apiClient";
 import {
@@ -48,24 +53,37 @@ import {
 
 // 🔹 Auth bootstrapper
 function AuthBootstrap({ children }) {
-  const { setUser, markLoggedIn } = useAuth();
+  const { setUser: setAuthUser, markLoggedIn } = useAuth();
+  const { setUser: setStoreUser } = useStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
+        // Try fetching the authenticated user from the backend (cookie-based /api/user)
         const u = await me().catch(() => null);
+
         if (u) {
-          setUser(u);
+          // sync both AuthContext and Zustand store
+          setAuthUser(u);
+          setStoreUser(u);
           localStorage.setItem("user", JSON.stringify(u));
           markLoggedIn?.(true);
         } else {
+          // fallback: if we have a locally saved user, use that (helps offline / fast refresh)
           const saved = localStorage.getItem("user");
           if (saved) {
-            const parsed = JSON.parse(saved);
-            setUser(parsed);
-            markLoggedIn?.(true);
+            try {
+              const parsed = JSON.parse(saved);
+              setAuthUser(parsed);
+              setStoreUser(parsed);
+              markLoggedIn?.(true);
+            } catch (e) {
+              // invalid saved user — clear it
+              localStorage.removeItem("user");
+              markLoggedIn?.(false);
+            }
           } else {
             markLoggedIn?.(false);
           }
@@ -77,7 +95,7 @@ function AuthBootstrap({ children }) {
     return () => {
       mounted = false;
     };
-  }, [setUser, markLoggedIn]);
+  }, [setAuthUser, setStoreUser, markLoggedIn]);
 
   if (!ready) return null;
   return children;
@@ -85,13 +103,18 @@ function AuthBootstrap({ children }) {
 
 // 🔹 Main App Content
 function AppContent() {
-  const { setUser, setProducts, setThriftItems, setMonofitCombos } = useStore();
+  const { user: storeUser, setUser, setProducts, setThriftItems, setMonofitCombos } = useStore();
 
   useEffect(() => {
-    setUser((prev) => prev ?? mockUser);
+    // Only set mock data when there's no authenticated user in the store.
+    // This prevents overwriting a real logged-in user on app boot.
+    setUser((prev) => prev ?? (storeUser ? storeUser : null ?? mockUser));
+
+    // populate product/thrift/monofit mock data (UI data — safe to always set)
+    setProducts(mockProducts);
     setThriftItems(mockThriftItems);
     setMonofitCombos(mockMonofitCombos);
-  }, [setUser, setProducts, setThriftItems, setMonofitCombos]);
+  }, [setUser, setProducts, setThriftItems, setMonofitCombos, storeUser]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -103,6 +126,8 @@ function AppContent() {
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          //user dash
+          <Route path="/my-orders" element={<UserDashboard />} />
 
           {/* 🌐 Public */}
           <Route path="/home" element={<Home />} />

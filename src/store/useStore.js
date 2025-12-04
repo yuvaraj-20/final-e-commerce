@@ -31,10 +31,44 @@ const defaultMonofitFilters = {
   search: "",
 };
 
+// hydrate user from localStorage if present (safe JSON parse)
+let _hydratedUser = null;
+try {
+  const raw = localStorage.getItem("user");
+  if (raw) _hydratedUser = JSON.parse(raw);
+} catch (e) {
+  console.warn("Failed to parse saved user from localStorage", e);
+  _hydratedUser = null;
+}
+
 export const useStore = create((set, get) => ({
-  // User state
-  user: null,
-  setUser: (user) => set({ user }),
+  // User state (hydrated from localStorage if available)
+  user: _hydratedUser || null,
+
+  // setUser now persists to localStorage so UI remains consistent across reloads
+  setUser: (user) => {
+    // allow passing function or direct value
+    if (typeof user === "function") {
+      set((state) => {
+        const newUser = user(state.user);
+        try {
+          if (newUser) localStorage.setItem("user", JSON.stringify(newUser));
+          else localStorage.removeItem("user");
+        } catch (e) {
+          console.warn("Failed persisting user to localStorage", e);
+        }
+        return { user: newUser };
+      });
+    } else {
+      try {
+        if (user) localStorage.setItem("user", JSON.stringify(user));
+        else localStorage.removeItem("user");
+      } catch (e) {
+        console.warn("Failed persisting user to localStorage", e);
+      }
+      set({ user });
+    }
+  },
 
   // Cart state (front-end canonical)
   cart: [],

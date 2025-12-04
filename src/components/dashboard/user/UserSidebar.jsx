@@ -1,120 +1,166 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, User } from 'lucide-react';
-import { useStore } from '../../../store/useStore';
+// src/components/dashboard/UserSidebar.jsx
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, LogOut } from "lucide-react";
+import { useStore } from "../../../store/useStore";
+import { useNavigate } from "react-router-dom";
 
 const UserSidebar = ({
-  tabs,
+  tabs = [],
   activeTab,
   setActiveTab,
   sidebarOpen,
-  setSidebarOpen
+  setSidebarOpen,
 }) => {
-  const { user } = useStore();
+  const { user, setUser } = useStore();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      const ok = window.confirm("Are you sure you want to log out?");
+      if (!ok) return;
+
+      await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      try {
+        localStorage.removeItem("access_token");
+      } catch (e) {}
+      try {
+        sessionStorage.removeItem("access_token");
+      } catch (e) {}
+
+      if (typeof setUser === "function") setUser(null);
+      navigate("/login", { replace: true });
+    } catch (err) {
+      console.error("Logout failed", err);
+      if (typeof setUser === "function") setUser(null);
+      navigate("/login", { replace: true });
+    }
+  };
+
+  const renderNav = (isMobile = false) => (
+    <nav className="px-4 py-3 overflow-auto flex-1" aria-label="Main navigation">
+      <div className="space-y-2">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (isMobile) setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                activeTab === tab.id
+                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
+                  : "text-gray-700 hover:bg-gray-100"
+              }`}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+            >
+              {Icon && <Icon className="h-5 w-5 flex-shrink-0" />}
+              <span className="font-medium truncate">{tab.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+
+  const renderHeader = (showClose = false) => (
+    <div className="p-6 border-b border-gray-200">
+      <div className="flex items-center gap-3">
+        <div className="flex-shrink-0">
+          <img
+            src={
+              user?.avatar ||
+              "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=100"
+            }
+            alt={user?.name || "User avatar"}
+            className="w-12 h-12 rounded-full object-cover"
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-gray-900 truncate">
+            {user?.name || "Guest User"}
+          </p>
+          <p className="text-sm text-gray-600 truncate">
+            {user?.email || "—"}
+          </p>
+        </div>
+        {showClose && (
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="ml-auto p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            aria-label="Close sidebar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderFooter = () => (
+    <div className="p-6 border-t border-gray-200 bg-white">
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors font-medium"
+        aria-label="Logout"
+      >
+        <LogOut className="h-5 w-5" />
+        <span>Logout</span>
+      </button>
+    </div>
+  );
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Mobile / tablet drawer */}
       <AnimatePresence>
         {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+            <motion.aside
+              initial={{ x: -320 }}
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
+              transition={{ type: "tween", duration: 0.25 }}
+              className="fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-xl lg:hidden flex flex-col"
+              role="navigation"
+              aria-label="User sidebar mobile"
+            >
+              {renderHeader(true)}
+              {renderNav(true)}
+              {renderFooter()}
+            </motion.aside>
+          </>
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
-      <motion.div
-        initial={false}
-        animate={{ x: sidebarOpen ? 0 : -320 }}
-        className="fixed lg:static inset-y-0 left-0 z-50 w-80 bg-white shadow-xl lg:shadow-none border-r border-gray-200 lg:translate-x-0"
+      {/* Desktop sidebar (always visible) */}
+      <aside
+        className="hidden lg:flex lg:flex-col lg:w-80 bg-white border-r border-gray-200 min-h-screen"
+        role="navigation"
+        aria-label="User sidebar desktop"
       >
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-2 rounded-lg">
-                <User className="h-6 w-6" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">My Dashboard</h2>
-                <p className="text-sm text-gray-600">AI Fashion Platform</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* User Info */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <img
-                src={user?.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=100'}
-                alt={user?.name}
-                className="w-12 h-12 rounded-full object-cover"
-              />
-              <div>
-                <p className="font-medium text-gray-900">{user?.name}</p>
-                <p className="text-sm text-gray-600">{user?.email}</p>
-                {user?.badges && user.badges.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {user.badges.slice(0, 2).map((badge, index) => (
-                      <span
-                        key={index}
-                        className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium"
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id);
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{tab.name}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Footer */}
-          <div className="p-6 border-t border-gray-200">
-            <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-lg p-4">
-              <h3 className="font-medium text-gray-900 mb-1">AI Style Assistant</h3>
-              <p className="text-sm text-gray-600">
-                Get personalized recommendations and style tips
-              </p>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+        {renderHeader(false)}
+        {renderNav(false)}
+        {renderFooter()}
+      </aside>
     </>
   );
 };

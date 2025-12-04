@@ -1,183 +1,172 @@
-import React from "react";
-import { Minus, Plus, Trash2, Heart } from "lucide-react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { X, Plus, Minus, Heart, Share2 } from "lucide-react";
+import { toast } from "react-hot-toast";
 
-import { useStore } from "../../store/useStore";
-import { me } from "../../lib/apiClient";
+const CartItem = ({
+  item,
+  onQuantityChange,
+  onRemove,
+  onMoveToWishlist
+}) => {
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
-const CartItem = ({ item, index, onQuantityChange, onRemove }) => {
-  const { wishlist, toggleWishlist } = useStore();
-  const navigate = useNavigate();
+  const {
+    id,
+    name,
+    price,
+    quantity,
+    image,
+    type = 'product',
+    condition,
+    seller
+  } = item;
 
-  const nextPath =
-    (window.location && window.location.pathname + window.location.search) ||
-    "/cart";
+  const unit = parseFloat(price) || 0;
+  const total = unit * (quantity || 1);
 
-  const isWishlisted = Array.isArray(wishlist)
-    ? wishlist.some((w) =>
-        typeof w === "object" ? w?.id === item?.product?.id : w === item?.product?.id
-      )
-    : false;
+  // Check if item is in wishlist
+  useEffect(() => {
+    // You can implement wishlist check here
+    // For now, we'll set it to false
+    setIsWishlisted(false);
+  }, [id]);
 
-  const ensureAuth = async () => {
-    try {
-      await me();
-      return true;
-    } catch {
-      toast.error("Please sign in to continue");
-      navigate(`/login?next=${encodeURIComponent(nextPath)}`, { replace: true });
-      return false;
+  const handleIncrement = () => {
+    onQuantityChange?.(id, (quantity || 1) + 1);
+  };
+
+  const handleDecrement = () => {
+    onQuantityChange?.(id, Math.max(1, (quantity || 1) - 1));
+  };
+
+  const handleRemoveItem = () => {
+    onRemove?.(id);
+  };
+
+  const handleWishlist = (e) => {
+    e?.stopPropagation();
+    onMoveToWishlist?.(item);
+    setIsWishlisted(true);
+    toast.success('Item moved to wishlist');
+  };
+
+  const handleShare = (e) => {
+    e?.stopPropagation();
+    const shareData = {
+      title: name,
+      text: `Check out this ${type} on our store: ${name}`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      navigator.share(shareData).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(shareData.url);
+      toast.success('Link copied to clipboard');
     }
   };
-
-  const handleMoveToWishlist = async () => {
-    const ok = await ensureAuth();
-    if (!ok) return;
-
-    if (!isWishlisted && item?.product?.id) {
-      toggleWishlist(item.product.id);
-      toast.success("Moved to wishlist");
-    }
-    onRemove?.(item?.id);
-  };
-
-  const decQty = () => {
-    const q = Number(item?.quantity) || 1;
-    if (q <= 1) return;
-    onQuantityChange?.(item?.id, q - 1);
-  };
-
-  const incQty = () => {
-    const q = Number(item?.quantity) || 1;
-    onQuantityChange?.(item?.id, q + 1);
-  };
-
-  const img =
-    (Array.isArray(item?.product?.images) && item.product.images[0]) || null;
-  const name = item?.product?.name || "Untitled";
-  const desc = item?.product?.description || "—";
-  const unit = Number(item?.product?.price) || 0;
-  const qty = Number(item?.quantity) || 1;
-  const line = unit * qty;
-
-  // Detect store type dynamically
-  const storeType = item?.storeType || item?.product?.storeType || "general";
-  const storeLabel =
-    storeType === "monofit"
-      ? { name: "MonoFit Store", color: "bg-purple-100 text-purple-800" }
-      : storeType === "thrift"
-      ? { name: "Thrift Store", color: "bg-green-100 text-green-800" }
-      : storeType === "custom"
-      ? { name: "Custom Design", color: "bg-blue-100 text-blue-800" }
-      : { name: "General Store", color: "bg-gray-100 text-gray-700" };
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -100 }}
-      transition={{ duration: 0.3, delay: index * 0.1 }}
-      className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow"
+      className="relative group p-4 rounded-xl hover:bg-gray-50 transition-colors"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-6">
+      <div className="flex items-start space-x-4">
         {/* Product Image */}
-        <div className="flex-shrink-0">
-          <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100">
-            {img ? (
-              <img
-                src={img}
-                alt={name}
-                className="w-24 h-24 object-cover"
-              />
-            ) : (
-              <div className="w-24 h-24 grid place-items-center text-gray-400 text-xs">
-                No image
-              </div>
-            )}
-          </div>
+        <div className="w-24 h-24 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden">
+          <img
+            src={image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23f3f4f6" width="100" height="100"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="14" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E'}
+            alt={name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23f3f4f6" width="100" height="100"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="14" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
+            }}
+          />
         </div>
 
-        {/* Product Details */}
-        <div className="flex-1">
-          <div className="flex justify-between items-start mb-2">
-            <div className="min-w-0">
-              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">
+        {/* Product Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between">
+            <div>
+              <h3 className="font-medium text-gray-900 line-clamp-2">
                 {name}
               </h3>
-              <p className="text-gray-600 text-sm line-clamp-2">{desc}</p>
-
-              {/* 🏷️ Animated Store Label */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8, y: 4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-                className={`inline-block mt-2 px-2 py-1 rounded-full text-xs font-medium shadow-sm ${storeLabel.color}`}
-              >
-                {storeLabel.name}
-              </motion.div>
-            </div>
-            <button
-              onClick={() => onRemove?.(item?.id)}
-              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-              title="Remove"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 mb-4">
-            {item?.size && (
-              <span className="text-sm text-gray-600">
-                Size: <span className="font-medium">{item.size}</span>
-              </span>
-            )}
-            {item?.color && (
-              <span className="text-sm text-gray-600">
-                Color: <span className="font-medium">{item.color}</span>
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between">
-            {/* Quantity Controls */}
-            <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">Qty:</span>
-              <div className="flex items-center border border-gray-300 rounded-lg">
-                <button
-                  onClick={decQty}
-                  className="p-2 hover:bg-gray-100 transition-colors"
-                  title="Decrease"
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-                <span className="px-4 py-2 font-medium">{qty}</span>
-                <button
-                  onClick={incQty}
-                  className="p-2 hover:bg-gray-100 transition-colors"
-                  title="Increase"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
+              {type === 'thrift' && condition && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                  {condition}
+                </span>
+              )}
+              {seller && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Sold by: {seller.name}
+                </p>
+              )}
             </div>
 
-            {/* Price and Actions */}
             <div className="text-right">
-              <div className="text-lg font-bold text-gray-900 mb-2">
-                ${line.toFixed(2)}
-              </div>
-              <div className="text-sm text-gray-600 mb-2">
+              <p className="font-medium text-gray-900">${total.toFixed(2)}</p>
+              <p className="text-sm text-gray-500">
                 ${unit.toFixed(2)} each
-              </div>
+              </p>
+            </div>
+          </div>
+
+          {/* Quantity Controls */}
+          <div className="mt-3 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
               <button
-                onClick={handleMoveToWishlist}
-                className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center space-x-1"
-                title={isWishlisted ? "Already in wishlist" : "Save for later"}
+                onClick={handleDecrement}
+                className="p-1 text-gray-500 hover:text-gray-700"
+                disabled={quantity <= 1}
               >
-                <Heart className={`h-3 w-3 ${isWishlisted ? "fill-current" : ""}`} />
-                <span>{isWishlisted ? "In wishlist" : "Save for later"}</span>
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="w-8 text-center">{quantity}</span>
+              <button
+                onClick={handleIncrement}
+                className="p-1 text-gray-500 hover:text-gray-700"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleWishlist}
+                className={`text-sm flex items-center space-x-1 ${isWishlisted ? 'text-purple-600' : 'text-gray-500 hover:text-purple-600'
+                  }`}
+                title={isWishlisted ? "In wishlist" : "Save for later"}
+              >
+                <Heart
+                  className={`h-4 w-4 ${isWishlisted ? 'fill-current' : ''}`}
+                />
+                <span className="hidden sm:inline">
+                  {isWishlisted ? "In wishlist" : "Save"}
+                </span>
+              </button>
+
+              <button
+                onClick={handleShare}
+                className="text-gray-500 hover:text-gray-700"
+                title="Share"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+
+              <button
+                onClick={handleRemoveItem}
+                className="text-red-500 hover:text-red-700"
+                title="Remove"
+              >
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>

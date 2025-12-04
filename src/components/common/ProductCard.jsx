@@ -29,29 +29,33 @@ const ProductCard = ({ product, index = 0 }) => {
     e.preventDefault();
     e.stopPropagation();
 
+    console.log("ProductCard: handleAddToCart triggered for", product.id);
+
     const sizes = normArray(product?.sizes);
     const colors = normArray(product?.colors);
 
-    // Try server-backed cart for logged-in users
+    // Try server-backed cart (auth or guest)
     try {
-      const user = await me();
-      if (user && typeof addToCartServer === 'function') {
+      console.log("ProductCard: Checking addToCartServer", typeof addToCartServer);
+      if (typeof addToCartServer === 'function') {
+        console.log("ProductCard: Calling addToCartServer...");
         await addToCartServer({
           product_id: product.id,
           quantity: 1,
           store: 'monofit',
+          type: 'product',
         });
+        console.log("ProductCard: addToCartServer success");
         toast.success('Added to cart!');
         return;
       }
     } catch (err) {
-      // If not authenticated, gently redirect via login page with next
-      if (err?.response?.status === 401) {
-        navigate(`/login?next=${encodeURIComponent('/products')}`);
-      }
+      console.warn("Server cart add failed, falling back to local", err);
+      console.error("ProductCard: Error details:", err);
       // fall through to local cart
     }
 
+    console.log("ProductCard: Falling back to local addToCart");
     // Fallback: local cart (guest or if server add fails)
     addToCart({
       product,
@@ -109,11 +113,10 @@ const ProductCard = ({ product, index = 0 }) => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleToggleWishlist}
-              className={`p-2 rounded-full shadow-lg transition-colors ${
-                isWishlisted
-                  ? 'bg-red-500 text-white'
-                  : 'bg-white text-gray-600 hover:bg-red-50 hover:text-red-500'
-              }`}
+              className={`p-2 rounded-full shadow-lg transition-colors ${isWishlisted
+                ? 'bg-red-500 text-white'
+                : 'bg-white text-gray-600 hover:bg-red-50 hover:text-red-500'
+                }`}
             >
               <Heart className={`h-4 w-4 ${isWishlisted ? 'fill-current' : ''}`} />
             </motion.button>
@@ -171,12 +174,12 @@ const ProductCard = ({ product, index = 0 }) => {
                   style={{
                     backgroundColor:
                       color.toLowerCase() === 'white' ? '#ffffff' :
-                      color.toLowerCase() === 'black' ? '#000000' :
-                      color.toLowerCase() === 'navy' ? '#1f2937' :
-                      color.toLowerCase() === 'gray' ? '#6b7280' :
-                      color.toLowerCase() === 'red' ? '#ef4444' :
-                      color.toLowerCase() === 'blue' ? '#3b82f6' :
-                      '#8b5cf6'
+                        color.toLowerCase() === 'black' ? '#000000' :
+                          color.toLowerCase() === 'navy' ? '#1f2937' :
+                            color.toLowerCase() === 'gray' ? '#6b7280' :
+                              color.toLowerCase() === 'red' ? '#ef4444' :
+                                color.toLowerCase() === 'blue' ? '#3b82f6' :
+                                  '#8b5cf6'
                   }}
                 />
               ))}

@@ -5,6 +5,9 @@ import {
   get,
   ensureCsrf,
   readXsrfToken,
+  cartApi,
+  me,
+  sanctumPost,
 } from "../lib/apiClient"; // uses your existing apiClient.js
 
 // Default filter configurations
@@ -187,20 +190,37 @@ export const useStore = create((set, get) => ({
   },
 
   // Add to cart on server (expects product_id, quantity, optional store)
-  addToCartServer: async ({ product_id, quantity = 1, store = null }) => {
+  // Add to cart on server (expects product_id, quantity, optional store)
+  addToCartServer: async ({ product_id, quantity = 1, store = null, type = 'product', condition = null, seller_id = null, seller_name = null }) => {
     try {
       await ensureCsrf();
-      const xsrf = readXsrfToken();
-      const res = await api.post(
-        "/api/cart/add",
-        { product_id, quantity, store },
-        { headers: { "X-XSRF-TOKEN": xsrf } }
-      );
-      const payload = res?.data ?? res;
+      const token = readXsrfToken();
+
+      const payload = {
+        product_id,
+        type,
+        quantity,
+        store: store || (type === 'thrift' ? 'thrift' : 'monofit'),
+      };
+
+      if (type === 'thrift') {
+        payload.condition = condition;
+        payload.seller_id = seller_id;
+        payload.seller_name = seller_name;
+      }
+
+      const res = await api.post("/api/cart/add", payload, {
+        headers: {
+          "X-XSRF-TOKEN": token,
+        },
+      });
+
+      const data = res?.data ?? res;
+
       // After add, backend usually returns updated cart model -> normalise items
       let items = [];
-      if (payload?.items && Array.isArray(payload.items)) {
-        items = payload.items.map((i) => {
+      if (data?.items && Array.isArray(data.items)) {
+        items = data.items.map((i) => {
           const p = i.product ?? i.product_data ?? {};
           return {
             id: i.id,
@@ -214,8 +234,8 @@ export const useStore = create((set, get) => ({
             image: p.image || (Array.isArray(p.images) ? p.images[0] : undefined),
           };
         });
-      } else if (Array.isArray(payload)) {
-        items = payload;
+      } else if (Array.isArray(data)) {
+        items = data;
       }
       set({ cart: items });
       return items;

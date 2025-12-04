@@ -10,7 +10,7 @@ export default function Feed() {
   async function load() {
     setLoading(true);
     const { data } = await api.get("/feed");
-    setPosts(data.data || data); // laravel paginate or array
+    setPosts(data.data || data); 
     setLoading(false);
   }
 

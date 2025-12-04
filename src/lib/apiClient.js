@@ -6,10 +6,10 @@ import Cookies from "js-cookie";
 export const AUTH_MODE = (import.meta.env.VITE_AUTH_MODE || "sanctum").toLowerCase();
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-const LOGIN_PATH    = import.meta.env.VITE_LOGIN_PATH    || "/login";
+const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || "/login";
 const REGISTER_PATH = import.meta.env.VITE_REGISTER_PATH || "/register";
-const LOGOUT_PATH   = import.meta.env.VITE_LOGOUT_PATH   || "/logout";
-const ME_PATH       = import.meta.env.VITE_ME_PATH       || "/api/user";
+const LOGOUT_PATH = import.meta.env.VITE_LOGOUT_PATH || "/logout";
+const ME_PATH = import.meta.env.VITE_ME_PATH || "/api/user";
 
 /* ========= AXIOS ========= */
 export const api = axios.create({
@@ -174,6 +174,90 @@ export async function me() {
   return data;
 }
 
+const cartApi = {
+  // Get cart
+  get: async () => {
+    try {
+      const response = await api.get('/api/cart');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching cart:', error);
+      throw error;
+    }
+  },
+
+  // Add item to cart
+  add: async (itemData) => {
+    try {
+      const payload = {
+        product_id: itemData.id,
+        type: itemData.type === 'thrift' ? 'thrift' : 'product',
+        quantity: itemData.quantity || 1,
+        store: itemData.store || (itemData.type === 'thrift' ? 'thrift' : 'monofit'),
+      };
+
+      if (itemData.type === 'thrift') {
+        payload.condition = itemData.condition;
+        payload.seller_id = itemData.seller_id;
+        payload.seller_name = itemData.seller_name;
+      }
+
+      const response = await api.post('/api/cart/add', payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      throw error;
+    }
+  },
+
+  // Update cart item quantity
+  update: async (itemId, quantity) => {
+    try {
+      const response = await api.put(`/api/cart/item/${itemId}`, {
+        quantity: quantity
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating cart item:', error);
+      throw error;
+    }
+  },
+
+  // Remove item from cart
+  remove: async (itemId) => {
+    try {
+      const response = await api.delete(`/api/cart/item/${itemId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+      throw error;
+    }
+  },
+
+  // Apply promo code
+  applyPromo: async (code) => {
+    try {
+      // This endpoint might need to be added to your backend
+      const response = await api.post('/api/cart/apply-promo', { code });
+      return response.data;
+    } catch (error) {
+      console.error('Error applying promo code:', error);
+      throw error;
+    }
+  },
+
+  // Clear cart
+  clear: async () => {
+    try {
+      const response = await api.delete('/api/cart/clear');
+      return response.data;
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      throw error;
+    }
+  }
+};
+export { cartApi };
 /* default export for convenience */
 export default {
   api,
@@ -187,6 +271,7 @@ export default {
   login,
   logout,
   me,
+  cart: cartApi,
   resolveImageUrl,
   resolveImageArray,
 };

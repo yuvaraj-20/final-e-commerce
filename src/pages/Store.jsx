@@ -40,6 +40,7 @@ const Products = () => {
     cart: globalCart,
     wishlist: globalWishlist,
     addToCart,
+    addToCartServer,
     removeFromCart,
     updateCartQuantity,
     clearCart,
@@ -96,43 +97,27 @@ const Products = () => {
     return false;
   };
 
-  const handleAddToCart = (product, event) => {
+  const handleAddToCart = async (product, event) => {
     event?.stopPropagation();
-    if (!isLoggedIn) {
+
+    // Try server-backed cart first (supports both auth and guest via tokens)
+    if (typeof addToCartServer === "function") {
       try {
-        const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
-        const defaultSize = product.default_size || "M";
-        const defaultColor = product.colors?.[0] || product.color || "default";
-
-        const existing = stored.find(
-          (i) =>
-            i.product.id === product.id &&
-            i.size === defaultSize &&
-            i.color === defaultColor
-        );
-
-        if (existing) {
-          existing.quantity = (existing.quantity || 1) + 1;
-          toast.success(`${product.name} quantity updated in cart!`);
-        } else {
-          stored.push({
-            id: `${product.id}-${defaultSize}-${defaultColor}-${Date.now()}`,
-            product,
-            size: defaultSize,
-            color: defaultColor,
-            quantity: 1,
-          });
-          toast.success(`${product.name} added to cart!`);
-        }
-
-        localStorage.setItem("guestCart", JSON.stringify(stored));
+        await addToCartServer({
+          product_id: product.id,
+          quantity: 1,
+          store: "monofit",
+          type: "product",
+        });
+        toast.success(`${product.name} added to cart!`);
+        return;
       } catch (err) {
-        console.error(err);
-        toast.error("Could not add to cart");
+        console.warn("addToCartServer failed, falling back to local cart", err);
+        // Fall through to local cart strategy below
       }
-      return;
     }
 
+    // Fallback: local cart logic
     if (typeof addToCart === "function") {
       const item = {
         product,
@@ -145,7 +130,38 @@ const Products = () => {
       return;
     }
 
-    toast.error("Cart action unavailable");
+    // Last resort: manual local storage (mostly for guests if addToCart missing)
+    try {
+      const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
+      const defaultSize = product.default_size || "M";
+      const defaultColor = product.colors?.[0] || product.color || "default";
+
+      const existing = stored.find(
+        (i) =>
+          i.product.id === product.id &&
+          i.size === defaultSize &&
+          i.color === defaultColor
+      );
+
+      if (existing) {
+        existing.quantity = (existing.quantity || 1) + 1;
+        toast.success(`${product.name} quantity updated in cart!`);
+      } else {
+        stored.push({
+          id: `${product.id}-${defaultSize}-${defaultColor}-${Date.now()}`,
+          product,
+          size: defaultSize,
+          color: defaultColor,
+          quantity: 1,
+        });
+        toast.success(`${product.name} added to cart!`);
+      }
+
+      localStorage.setItem("guestCart", JSON.stringify(stored));
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not add to cart");
+    }
   };
 
   const handleAddToWishlist = (product, event) => {
@@ -374,21 +390,19 @@ const Products = () => {
               <div className="hidden sm:flex items-center border border-gray-300 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-2 ${
-                    viewMode === "grid"
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
+                  className={`p-2 ${viewMode === "grid"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
                 >
                   <Grid className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-2 ${
-                    viewMode === "list"
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
+                  className={`p-2 ${viewMode === "list"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
                 >
                   <List className="h-4 w-4" />
                 </button>
@@ -499,11 +513,10 @@ const Products = () => {
 
           {!loading && !error && (
             <div
-              className={`grid gap-6 ${
-                viewMode === "grid"
-                  ? "grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-                  : "grid-cols-1"
-              }`}
+              className={`grid gap-6 ${viewMode === "grid"
+                ? "grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                : "grid-cols-1"
+                }`}
             >
               {sortedProducts.map((product, index) => (
                 <div key={product.id} className="relative group">
@@ -538,11 +551,10 @@ const Products = () => {
                     <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <button
                         onClick={(e) => handleAddToWishlist(product, e)}
-                        className={`p-2 rounded-full shadow-lg transition-all duration-200 ${
-                          isInWishlist(product.id)
-                            ? "bg-red-500 text-white"
-                            : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50"
-                        }`}
+                        className={`p-2 rounded-full shadow-lg transition-all duration-200 ${isInWishlist(product.id)
+                          ? "bg-red-500 text-white"
+                          : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50"
+                          }`}
                       >
                         <Heart
                           className="h-4 w-4"
@@ -563,7 +575,7 @@ const Products = () => {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => {}}
+                      onClick={() => { }}
                       className="absolute inset-0 bg-blue-600/10 hover:bg-blue-600/20 rounded-lg flex items-center justify-center opacity-0 hover:opacity-100 transition-all duration-300"
                     >
                       <div className="bg-blue-600 text-white px-4 py-2 rounded-full font-medium text-sm flex items-center space-x-2 shadow-lg">

@@ -233,38 +233,48 @@ const ProductDetail = () => {
       return false;
     }
 
-    // If logged in, prefer server-backed cart
-    if (isLoggedIn && typeof addToCartServer === "function") {
+    const productItem = {
+      id: product.id,
+      product: {
+        ...product,
+        image: mainImage
+      },
+      quantity: qty,
+      size: selectedSize,
+      color: selectedColor,
+      store: 'monofit',
+      type: 'product'
+    };
+
+    // Try server-backed cart first (supports both auth and guest via tokens)
+    if (typeof addToCartServer === "function") {
       try {
         await addToCartServer({
           product_id: product.id,
           quantity: qty,
           store: "monofit",
+          type: "product",
+          // Extra fields that might be useful for local optimistic updates if the server returns them
+          size: selectedSize,
+          color: selectedColor
         });
         toast.success(`${product.name} (${qty}x) added to cart`);
         return true;
       } catch (err) {
         console.warn("addToCartServer failed, falling back to local cart", err);
+        // Fall through to local cart strategy below
       }
     }
 
-    // Fallback: local cart (guest or if server add fails)
+    // Fallback: local cart (if server add fails or function missing)
     if (typeof addToCart === "function") {
-      addToCart({
-        product,
-        quantity: qty,
-        size: selectedSize,
-        color: selectedColor,
-      });
+      addToCart(productItem);
     } else {
       try {
         const stored = JSON.parse(localStorage.getItem("guestCart") || "[]");
         stored.push({
+          ...productItem,
           id: `${product.id}-${selectedSize || "M"}-${selectedColor || "default"}-${Date.now()}`,
-          product,
-          size: selectedSize || (product.sizes?.[0] ?? "M"),
-          color: selectedColor || (product.colors?.[0] ?? "default"),
-          quantity: qty,
         });
         localStorage.setItem("guestCart", JSON.stringify(stored));
       } catch (e) {
@@ -600,7 +610,7 @@ const ProductDetail = () => {
                     <ProductCard product={p} index={i} onClick={() => navigate(`/product/${p.id}`)} />
 
                     <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <button onClick={(e) => { e.stopPropagation(); handleWishlistItem(p, e); }} className={`p-2 rounded-full shadow-lg transition-all duration-200 ${ (wishlist || []).includes(p.id) ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50" }`} aria-label="Wishlist">
+                      <button onClick={(e) => { e.stopPropagation(); handleWishlistItem(p, e); }} className={`p-2 rounded-full shadow-lg transition-all duration-200 ${(wishlist || []).includes(p.id) ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50"}`} aria-label="Wishlist">
                         <Heart className="h-4 w-4" fill={(wishlist || []).includes(p.id) ? "currentColor" : "none"} />
                       </button>
 
@@ -621,7 +631,7 @@ const ProductDetail = () => {
                 <ProductCard product={p} index={i} onClick={() => navigate(`/product/${p.id}`)} />
 
                 <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <button onClick={(e) => { e.stopPropagation(); handleWishlistItem(p, e); }} className={`p-2 rounded-full shadow-lg transition-all duration-200 ${ (wishlist || []).includes(p.id) ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50" }`}>
+                  <button onClick={(e) => { e.stopPropagation(); handleWishlistItem(p, e); }} className={`p-2 rounded-full shadow-lg transition-all duration-200 ${(wishlist || []).includes(p.id) ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:text-red-500 hover:bg-red-50"}`}>
                     <Heart className="h-4 w-4" fill={(wishlist || []).includes(p.id) ? "currentColor" : "none"} />
                   </button>
 

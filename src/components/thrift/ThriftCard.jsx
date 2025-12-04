@@ -1,7 +1,7 @@
 // src/components/thrift/ThriftCard.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, Eye, Star, Zap, Share2 } from "lucide-react";
+import { Heart, MessageCircle, Eye, Star, Zap, Share2, ShoppingCart } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 
@@ -10,7 +10,7 @@ import { api } from "../../services/api";
 import { me, resolveImageArray } from "../../lib/apiClient";
 
 const ThriftCard = ({ item, index = 0 }) => {
-  const { likedThriftItems, toggleThriftLike } = useStore();
+  const { likedThriftItems, toggleThriftLike, addToCart, addToCartServer } = useStore();
   const navigate = useNavigate();
 
   // Normalize id to number/string consistently for comparisons
@@ -134,6 +134,60 @@ const ThriftCard = ({ item, index = 0 }) => {
     }
   };
 
+  const handleAddToCart = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+
+    const ok = await ensureAuth();
+    if (!ok) return;
+
+    try {
+      const thriftItem = {
+        id: itemId,
+        product: {
+          id: itemId,
+          name: item.name,
+          price: item.price,
+          image: images?.[0],
+          type: 'thrift',
+          condition: item.condition,
+          seller: {
+            id: sellerId,
+            name: sellerName,
+            avatar: sellerAvatar
+          }
+        },
+        quantity: 1,
+        store: 'thrift'
+      };
+
+      // For logged-in users, use server cart
+      const user = await me();
+      if (user && typeof addToCartServer === 'function') {
+        await addToCartServer({
+          product_id: itemId,
+          quantity: 1,
+          store: 'thrift',
+          type: 'thrift',
+          price: item.price,
+          name: item.name,
+          image: images?.[0],
+          condition: item.condition,
+          seller_id: sellerId,
+          seller_name: sellerName
+        });
+      } else {
+        // For guests, use local cart
+        addToCart(thriftItem);
+      }
+      
+      toast.success('Added to cart!');
+    } catch (err) {
+      console.error('Error adding to cart:', err);
+      toast.error('Failed to add to cart. Please try again.');
+    }
+  };
+
   const handleShare = async (e) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -246,6 +300,16 @@ const ThriftCard = ({ item, index = 0 }) => {
             title="Chat with Seller"
           >
             <MessageCircle className="h-4 w-4" />
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleAddToCart}
+            className="p-2 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition-colors"
+            title="Add to Cart"
+          >
+            <ShoppingCart className="h-4 w-4" />
           </motion.button>
         </div>
 

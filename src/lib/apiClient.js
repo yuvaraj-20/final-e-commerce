@@ -79,8 +79,12 @@ export async function post(path, payload = {}, opts = {}) {
 }
 
 export async function del(path, opts = {}) {
-  const res = await api.delete(path, opts);
-  return res.data;
+  try {
+    const res = await api.delete(path, opts);
+    return res.data;
+  } catch (err) {
+    throw err;
+  }
 }
 
 /* ========= Image URL helpers ========= */

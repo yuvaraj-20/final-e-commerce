@@ -106,12 +106,7 @@ function AppContent() {
   const { user: storeUser, setUser, setProducts, setThriftItems, setMonofitCombos } = useStore();
 
   useEffect(() => {
-    // Only set mock data when there's no authenticated user in the store.
-    // This prevents overwriting a real logged-in user on app boot.
-    setUser((prev) => prev ?? (storeUser ? storeUser : null ?? mockUser));
-
-    // populate product/thrift/monofit mock data (UI data — safe to always set)
-    setProducts(mockProducts);
+    setUser((prev) => prev ?? mockUser);
     setThriftItems(mockThriftItems);
     setMonofitCombos(mockMonofitCombos);
   }, [setUser, setProducts, setThriftItems, setMonofitCombos, storeUser]);

@@ -38,6 +38,9 @@ import SearchResults from "./pages/SearchResults";
 import ThriftSell from "./pages/ThriftSell";
 import Chat from "./pages/Chat";
 import TrustSafety from "./pages/TrustSafety";
+//payment
+import PaymentPending from "./components/checkout/PaymentPending";
+import PaymentExpired from "./components/checkout/PaymentExpired";
 
 //
 import UserDashboard from "./components/dashboard/user/UserDashboard";
@@ -197,7 +200,11 @@ function AppContent() {
               </Protected>
             }
           />
-
+          <Route
+            path="/checkout/pending/:orderId"
+            element={<PaymentPending />}
+          />
+          <Route path="/checkout/expired" element={<PaymentExpired />} />
           <Route
             path="/admin/dashboard"
             element={

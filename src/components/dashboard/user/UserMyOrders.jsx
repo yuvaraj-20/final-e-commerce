@@ -1,11 +1,62 @@
 // src/components/dashboard/user/UserMyOrders.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Package, Truck, CheckCircle, Clock, XCircle, Eye } from "lucide-react";
+import {
+  Package,
+  Truck,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Eye,
+  AlertCircle,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../../../services/api";
 import { useStore } from "../../../store/useStore";
+
+/* ---------------- Payment Pending Helpers ---------------- */
+
+const isPaymentPending = (order) => {
+  const paymentStatus = (order.payment_status || "").toLowerCase();
+  const paymentMethod = (order.payment_method || "").toLowerCase();
+
+  return (
+    paymentMethod !== "cod" &&
+    (paymentStatus === "pending" ||
+      paymentStatus === "initiated" ||
+      paymentStatus === "verification_pending")
+  );
+};
+
+const PendingPaymentBanner = ({ order, onResume }) => {
+  return (
+    <div className="mb-3 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-yellow-800">
+            Payment Pending
+          </p>
+          <p className="text-xs text-yellow-700 mt-1">
+            We couldn’t confirm your payment yet. If money was deducted, it will
+            be updated shortly or refunded.
+          </p>
+
+          <button
+            onClick={onResume}
+            className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition"
+          >
+            Complete Payment
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------- Status Config ---------------- */
 
 const statusOptions = [
   { id: "all", label: "All Orders" },
@@ -37,6 +88,8 @@ const statusIcon = (status) => {
   }
 };
 
+/* ---------------- Formatters ---------------- */
+
 const formatDate = (value) => {
   if (!value) return "—";
   const d = new Date(value);
@@ -61,6 +114,8 @@ const formatPrice = (value) => {
   }
 };
 
+/* ---------------- Component ---------------- */
+
 const UserMyOrders = () => {
   const { user, orders, setOrders } = useStore();
   const [isLoading, setIsLoading] = useState(true);
@@ -69,6 +124,7 @@ const UserMyOrders = () => {
 
   useEffect(() => {
     if (!user) return;
+
     const loadOrders = async () => {
       setIsLoading(true);
       try {
@@ -80,6 +136,7 @@ const UserMyOrders = () => {
         setIsLoading(false);
       }
     };
+
     loadOrders();
   }, [user, setOrders]);
 
@@ -91,7 +148,7 @@ const UserMyOrders = () => {
     );
   }, [orders, selectedStatus]);
 
-  // ---------- UI helpers ----------
+  /* ---------------- UI States ---------------- */
 
   const renderEmpty = () => (
     <div className="flex flex-col items-center justify-center pt-16 pb-24">
@@ -106,7 +163,7 @@ const UserMyOrders = () => {
       </p>
       <button
         onClick={() => navigate("/products")}
-        className="mt-6 px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-medium shadow-md hover:shadow-lg hover:opacity-95 transition"
+        className="mt-6 px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-medium shadow-md hover:shadow-lg transition"
       >
         Start Shopping
       </button>
@@ -147,6 +204,15 @@ const UserMyOrders = () => {
             transition={{ duration: 0.2, delay: idx * 0.03 }}
             className="rounded-xl border border-gray-100 bg-white px-4 py-4 sm:px-5 sm:py-5 shadow-sm hover:shadow-md transition-shadow"
           >
+            {isPaymentPending(order) && (
+              <PendingPaymentBanner
+                order={order}
+                onResume={() =>
+                  navigate(`/checkout/pending/${order.id}`)
+                }
+              />
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -157,15 +223,19 @@ const UserMyOrders = () => {
                     #{order.id ?? order.order_number ?? "—"}
                   </span>
                 </div>
+
                 <p className="text-sm text-gray-600">
                   Placed on{" "}
                   <span className="font-medium">
                     {formatDate(order.created_at || order.date)}
                   </span>
                 </p>
+
                 {firstItem && (
                   <p className="text-sm text-gray-700 line-clamp-1">
-                    {firstItem.name || firstItem.product_name || "Fashion item"}
+                    {firstItem.name ||
+                      firstItem.product_name ||
+                      "Fashion item"}
                     {itemCount > 1 && (
                       <span className="text-gray-500">
                         {" "}
@@ -214,7 +284,6 @@ const UserMyOrders = () => {
 
   return (
     <section className="w-full px-6 md:px-10 pt-6 pb-10">
-      {/* Top row: title + filter (full-width like your design) */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-sm md:text-base font-semibold text-gray-900">
@@ -226,11 +295,13 @@ const UserMyOrders = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="hidden md:inline text-xs text-gray-500">Filter</span>
+          <span className="hidden md:inline text-xs text-gray-500">
+            Filter
+          </span>
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="text-xs md:text-sm border border-gray-200 rounded-full px-3 py-1.5 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="text-xs md:text-sm border border-gray-200 rounded-full px-3 py-1.5 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             {statusOptions.map((opt) => (
               <option key={opt.id} value={opt.id}>
@@ -241,7 +312,6 @@ const UserMyOrders = () => {
         </div>
       </div>
 
-      {/* Main content: empty / skeleton / list */}
       {isLoading
         ? renderSkeleton()
         : filteredOrders.length === 0
